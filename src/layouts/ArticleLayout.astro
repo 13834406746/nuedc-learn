@@ -1,0 +1,59 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const { entry, Content, headings } = Astro.props;
+
+const sectionNames = {
+  basics: '基础知识',
+  algorithms: '代码与算法',
+  hardware: '机械与硬件',
+  contests: '赛题解析',
+};
+const section = entry.collection;
+const siblings = (await getCollection(section))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+const trackNames = { control: '控制', vision: '视觉', both: '控制+视觉' };
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+---
+<BaseLayout title={entry.data.title}>
+  <div class="three-col">
+    <aside class="side-nav">
+      <h3>{sectionNames[section]}（{siblings.length}）</h3>
+      <ul>
+        {siblings.map((e) => (
+          <li><a href={`${import.meta.env.BASE_URL}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`} aria-current={e.id === entry.id ? 'page' : undefined}>{e.data.title}</a></li>
+        ))}
+      </ul>
+    </aside>
+    <article>
+      <h1>{entry.data.title}</h1>
+      <p class="article-meta">
+        {trackNames[entry.data.track]} · {entry.data.date.toLocaleDateString('zh-CN')}
+        {entry.data.tags.length > 0 && ` · ${entry.data.tags.join(' / ')}`}
+      </p>
+      <Content />
+      {
+        entry.data.resources.length > 0 && (
+          <div class="article-resources">
+            <h2>延伸阅读（精选外链）</h2>
+            <ul>
+              {entry.data.resources.map((r) => (
+                <li><a href={r.url} target="_blank" rel="noopener">{r.title}</a>{r.note && ` — ${r.note}`}</li>
+              ))}
+            </ul>
+          </div>
+        )
+      }
+    </article>
+    <nav class="toc" aria-label="本页目录">
+      <h3>本页目录</h3>
+      <ul>
+        {toc.map((h) => (
+          <li style={`margin-left:${(h.depth - 2) * 0.7}rem`}><a href={`#${h.slug}`}>{h.text}</a></li>
+        ))}
+      </ul>
+    </nav>
+  </div>
+</BaseLayout>
