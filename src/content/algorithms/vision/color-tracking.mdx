@@ -10,7 +10,14 @@ resources:
     note: find_blobs、阈值编辑器与 API 参考
 ---
 
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+
 颜色识别是视觉题的第二课，也是赛场上出场率最高的能力：循线、找靶标、区分色块、识别红点——全是「在图像里找一块特定颜色的东西，报告它的位置」。
+
+识别链路一句话：画面进来，按颜色阈值分离出目标，算出色块的质心坐标，质心与画面中心的偏差就是给控制层的输出：
+
+<FlowDiagram title="颜色识别数据流"
+             stages={['摄像头画面', 'LAB 阈值', 'find_blobs', '质心 (cx, cy)', '偏差 err', '控制量']} />
 
 ## 为什么不用 RGB 阈值
 

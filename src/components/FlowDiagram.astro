@@ -1,0 +1,89 @@
+---
+// 通用结构图组件：横向节点框图，可选反馈回路。
+// 用法（在 .mdx 中，先 import）：
+//   <FlowDiagram title="位置式 PID 闭环控制框图"
+//                stages={['目标值', '误差', 'PID 控制器', '执行器', '被控对象']}
+//                feedbackFrom={4} />
+// stages: 节点标签，从左到右；feedbackFrom: 从该节点(0基)画反馈线回到起点，可传数组画多条（串级内外环）。
+const { title = '', stages, feedbackFrom = [] } = Astro.props;
+
+const fbSources = Array.isArray(feedbackFrom) ? feedbackFrom : [feedbackFrom];
+
+const N = stages.length;
+const W = Math.max(N * 150 + 60, 640);
+const H = 150 + (fbSources.length > 1 ? (fbSources.length - 1) * 26 : 0);
+const boxW = 118;
+const boxH = 52;
+const gap = (W - 60 - N * boxW) / Math.max(N - 1, 1);
+const cx = (i) => 30 + boxW / 2 + i * (boxW + gap);
+const y = H / 2 - boxH / 2;
+
+const GRAD_ID = 'flowgrad';
+---
+<div class="flow-diagram">
+  {title && <p class="flow-title">{title}</p>}
+  <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={title} xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id={GRAD_ID} x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#6366f1" />
+        <stop offset="100%" stop-color="#8b5cf6" />
+      </linearGradient>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#4a4ac7" />
+      </marker>
+    </defs>
+
+    {
+      stages.map((label, i) => (
+        <g>
+          {i < N - 1 && (
+            <line x1={cx(i) + boxW / 2} y1={H / 2} x2={cx(i + 1) - boxW / 2} y2={H / 2}
+                  stroke="#4a4ac7" stroke-width="2" marker-end="url(#arrow)" />
+          )}
+          <rect x={cx(i) - boxW / 2} y={y} width={boxW} height={boxH} rx="10"
+                fill={i === 0 ? 'url(#' + GRAD_ID + ')' : '#ffffff'}
+                stroke={i === 0 ? 'none' : '#c7c9f0'} stroke-width="1.5" />
+          <text x={cx(i)} y={H / 2 + 5} text-anchor="middle"
+                font-size="13" font-family="Segoe UI, Microsoft YaHei, sans-serif"
+                fill={i === 0 ? '#ffffff' : '#1b1f2a'} font-weight="600">{label}</text>
+        </g>
+      ))
+    }
+
+    {
+      fbSources.filter((i) => i >= 0 && i < N).map((src, k) => (
+        <g>
+          <path d={`M ${cx(src)} ${y + boxH} C ${cx(src)} ${H - 14 - k * 26}, ${cx(0)} ${H - 14 - k * 26}, ${cx(0)} ${y + boxH}`}
+                fill="none" stroke={k === 0 ? '#f59e0b' : '#10b981'} stroke-width="2"
+                stroke-dasharray="6 4" marker-end="url(#arrow)" />
+          <text x={(cx(0) + cx(src)) / 2} y={H - 6 - k * 26} text-anchor="middle"
+                font-size="12" fill={k === 0 ? '#b45309' : '#047857'} font-weight="600"
+                font-family="Segoe UI, Microsoft YaHei, sans-serif">{k === 0 ? '外环反馈' : '内环反馈'}</text>
+        </g>
+      ))
+    }
+  </svg>
+</div>
+
+<style>
+  .flow-diagram {
+    margin: 1.4rem 0;
+    padding: 1rem 1.1rem 0.6rem;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+  .flow-title {
+    margin: 0 0 0.4rem;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .flow-diagram svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+</style>

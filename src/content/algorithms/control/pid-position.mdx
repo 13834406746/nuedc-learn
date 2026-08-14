@@ -13,10 +13,17 @@ resources:
 ---
 
 import PidDemo from '../../../components/PidDemo.astro';
+import FlowDiagram from '../../../components/FlowDiagram.astro';
 
 电赛控制题里，PID 是出场率最高的算法，没有之一。小车循迹、云台稳定、飞行器悬停、电机调速，底层全是它。这篇文章把位置式 PID 讲透：它在做什么、代码怎么写、坑在哪里。
 
 ## PID 在做什么
+
+先看整体结构——这是一个典型的闭环控制框图：目标值进入控制器，控制信号驱动执行器，被控对象的输出又被传感器测回来参与误差计算。PID 就工作在「误差 → 输出」这个环节：
+
+<FlowDiagram title="PID 闭环控制框图"
+             stages={['目标值', '误差', 'PID 控制器', '执行器', '被控对象']}
+             feedbackFrom={4} />
 
 控制问题的本质：有一个**目标值**（setpoint，比如目标速度 1000 rpm），有一个**反馈值**（feedback，编码器测到的实际速度），我们控制一个**执行器**（PWM 占空比）。PID 就是根据误差
 

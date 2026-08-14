@@ -10,7 +10,15 @@ resources:
     note: 常用电机驱动芯片的官方资料
 ---
 
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+
 控制题的地基是电机。不管上层是循迹、云台还是平衡，最后推的都是电机。这篇把「PWM 驱动 → 编码器测速 → PID 速度环」这条最常用的链路完整打通。
+
+先看整条链路——从目标速度到实际速度，闭环的每一步都在这张图里：
+
+<FlowDiagram title="电机速度闭环链路"
+             stages={['目标速度', 'PID 控制器', 'PWM + H桥', '直流电机', '编码器']}
+             feedbackFrom={4} />
 
 ## PWM 与 H 桥
 

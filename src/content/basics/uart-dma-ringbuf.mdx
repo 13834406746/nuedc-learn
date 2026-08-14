@@ -10,7 +10,14 @@ resources:
     note: USART 与 DMA 章节的权威定义
 ---
 
+import FlowDiagram from '../../../components/FlowDiagram.astro';
+
 控制题里串口几乎是万能接口：蓝牙遥控、视觉数据、传感器读数、调试输出。接收做不好，一切上层协议都是空中楼阁。这篇把 STM32 串口接收的三种方案和环形缓冲讲透——这也是本站视觉通信协议篇的基础。
+
+整条接收链路先看清楚——数据从外设到主循环解析，中间经过 DMA、中断和环形缓冲三层：
+
+<FlowDiagram title="IDLE + DMA + 环形缓冲 接收链路"
+             stages={['串口外设', 'DMA 搬运', '接收缓冲区', 'IDLE 中断', '环形缓冲', '主循环解析']} />
 
 ## 三种接收方案对比
 
