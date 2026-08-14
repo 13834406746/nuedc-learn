@@ -1,0 +1,48 @@
+---
+// 互补滤波演示：拖 α 权重，对比真值/加速度计/陀螺积分/融合四条曲线。
+---
+<div class="demo-box" id="filter-demo">
+  <noscript><p>启用 JavaScript 后可在本页交互式调 α 权重。</p></noscript>
+  <label>α（陀螺权重）
+    <input type="range" id="fd-alpha" min="0" max="1" step="0.01" value="0.95" />
+    <output id="fd-alpha-o">0.95</output>
+  </label>
+  <canvas id="fd-canvas" width="860" height="340"></canvas>
+  <p class="demo-metrics" id="fd-metrics"></p>
+</div>
+
+<script>
+  import { runComplementaryDemo } from '../lib/filter-sim.js';
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $('fd-canvas'), ctx = canvas.getContext('2d');
+
+  function draw() {
+    const alpha = parseFloat($('fd-alpha').value);
+    $('fd-alpha-o').value = alpha.toFixed(2);
+    const r = runComplementaryDemo({ alpha, points: 400 });
+    const W = canvas.width, H = canvas.height;
+    const minV = Math.min(...r.acc, ...r.gyroIntegral) - 5;
+    const maxV = Math.max(...r.truth, ...r.gyroIntegral) + 5;
+    const x = (i) => (i / (r.t.length - 1)) * W;
+    const yv = (v) => H - ((v - minV) / (maxV - minV)) * (H - 20) - 10;
+
+    ctx.clearRect(0, 0, W, H);
+    const line = (arr, color, dash) => {
+      ctx.strokeStyle = color; ctx.setLineDash(dash || []); ctx.beginPath();
+      arr.forEach((v, i) => (i ? ctx.lineTo(x(i), yv(v)) : ctx.moveTo(x(i), yv(v))));
+      ctx.stroke(); ctx.setLineDash([]);
+    };
+    line(r.acc, '#bbb');                        // 加速度计：噪
+    line(r.gyroIntegral, '#e8a33d', [4, 3]);    // 陀螺积分：漂
+    ctx.lineWidth = 2; line(r.fused, '#d33'); ctx.lineWidth = 1;  // 融合：主线加粗
+    line(r.truth, '#0a5a9c', [6, 4]);           // 真值：参考虚线
+
+    const rmse = (a, b) => Math.sqrt(a.reduce((s, v, i) => s + (v - b[i]) ** 2, 0) / a.length);
+    $('fd-metrics').textContent =
+      `融合 RMSE ${rmse(r.fused, r.truth).toFixed(2)}°  ·  纯陀螺 ${rmse(r.gyroIntegral, r.truth).toFixed(2)}°  ·  纯加速度计 ${rmse(r.acc, r.truth).toFixed(2)}°`;
+  }
+
+  $('fd-alpha').addEventListener('input', draw);
+  draw();
+</script>
