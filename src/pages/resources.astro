@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const names = {
+  basics: '基础知识',
+  algorithms: '代码与算法',
+  hardware: '机械与硬件',
+  contests: '赛题解析',
+};
+const base = import.meta.env.BASE_URL;
+const grouped = [];
+for (const c of ['basics', 'algorithms', 'hardware', 'contests']) {
+  const entries = await getCollection(c);
+  const links = entries.flatMap((e) =>
+    e.data.resources.map((r) => ({ ...r, from: e.data.title, href: `${base}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}` }))
+  );
+  grouped.push({ collection: c, links });
+}
+---
+<BaseLayout title="资源汇总">
+  <main style={`max-width:900px;margin:0 auto;padding:2rem 1rem;`}>
+    <h1>资源汇总</h1>
+    <p style={`color:var(--muted);`}>全站文章精选外链的自动聚合，按板块分组；来源文章更新时本页自动同步。</p>
+    {grouped.map(({ collection, links }) => links.length > 0 && (
+      <section>
+        <h2>{names[collection]}</h2>
+        <ul>
+          {links.map((l) => (
+            <li><a href={l.url} target="_blank" rel="noopener">{l.title}</a> — 来自 <a href={l.href}>{l.from}</a>{l.note && `（${l.note}）`}</li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </main>
+</BaseLayout>

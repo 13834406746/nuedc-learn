@@ -1,17 +1,35 @@
 ---
-
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+const base = import.meta.env.BASE_URL;
+const counts = {};
+for (const c of ['basics', 'algorithms', 'hardware', 'contests']) {
+  counts[c] = (await getCollection(c)).length;
+}
+const sections = [
+  { id: 'basics', name: '基础知识', desc: 'STM32 外设、传感器原理、Python 与 OpenCV 入门——巩固地基' },
+  { id: 'algorithms', name: '代码与算法', desc: 'PID、电机闭环、滤波、循迹、视觉识别与通信——本站核心' },
+  { id: 'hardware', name: '机械与硬件', desc: '车体、云台、安装与选型常识' },
+  { id: 'contests', name: '赛题解析', desc: '历年真题复盘，串起站内所有技术点' },
+];
 ---
-
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<link rel="icon" href="/favicon.ico" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
-</html>
+<BaseLayout title="首页">
+  <main style={`max-width:1100px;margin:0 auto;padding:2rem 1rem;`}>
+    <h1>电赛学习站</h1>
+    <p>个人备战知识库：控制类走<strong>进阶路线</strong>（串级 PID、调参方法论、姿态解算），视觉类走<strong>从零到实战路线</strong>（环境搭建 → 识别 → 与单片机联动）。所有内容以「跟着做能把题做出来」为标准。</p>
+    <div class="section-cards" style={`display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;margin-top:2rem;`}>
+      {sections.map((s) => (
+        <a href={`${base}${s.id}`} style={`border:1px solid var(--line);border-radius:6px;padding:1rem;display:block;`}>
+          <strong style={`font-size:1.05rem;`}>{s.name}</strong>
+          <span style={`color:var(--muted);font-size:0.85rem;`}>（{counts[s.id]} 篇）</span>
+          <p style={`margin:0.5rem 0 0;color:var(--muted);font-size:0.9rem;`}>{s.desc}</p>
+        </a>
+      ))}
+    </div>
+    <h2 style={`margin-top:3rem;`}>两条学习主线</h2>
+    <ul>
+      <li><strong>控制进阶</strong>：先读位置式 PID，依次过增量式、串级、调参方法论、电机闭环。</li>
+      <li><strong>视觉从零</strong>：从环境搭建开始，经图像基础、颜色循迹，最后到与单片机通信。</li>
+    </ul>
+  </main>
+</BaseLayout>

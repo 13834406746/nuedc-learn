@@ -1,0 +1,44 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  return ['basics', 'algorithms', 'hardware', 'contests'].map((collection) => ({
+    params: { collection },
+  }));
+}
+
+const { collection } = Astro.params;
+const names = {
+  basics: '基础知识',
+  algorithms: '代码与算法',
+  hardware: '机械与硬件',
+  contests: '赛题解析',
+};
+const intros = {
+  basics: '外设、传感器、语言与库的地基，巩固用。',
+  algorithms: '控制与视觉的核心算法，原理 + 代码 + 调参经验。',
+  hardware: '车体、云台与安装常识，影响上限的部分。',
+  contests: '历年真题复盘：方案分析 + 技术点索引。',
+};
+const entries = (await getCollection(collection)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+const trackNames = { control: '控制', vision: '视觉', both: '控制+视觉' };
+const base = import.meta.env.BASE_URL;
+---
+<BaseLayout title={names[collection]}>
+  <main style={`max-width:1100px;margin:0 auto;padding:2rem 1rem;`}>
+    <h1>{names[collection]}</h1>
+    <p style={`color:var(--muted);`}>{intros[collection]}</p>
+    <ul style={`list-style:none;padding:0;`}>
+      {entries.map((e) => (
+        <li style={`border-bottom:1px solid var(--line);padding:0.8rem 0;`}>
+          <a href={`${base}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`} style={`font-size:1.05rem;`}>{e.data.title}</a>
+          <span style={`color:var(--muted);font-size:0.85rem;margin-left:0.6rem;`}>{trackNames[e.data.track]}</span>
+          <p style={`margin:0.2rem 0 0;color:var(--muted);font-size:0.9rem;`}>{e.data.description}</p>
+        </li>
+      ))}
+    </ul>
+  </main>
+</BaseLayout>

@@ -1,0 +1,22 @@
+---
+import ArticleLayout from '../../../layouts/ArticleLayout.astro';
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const groups = await Promise.all(
+    ['basics', 'algorithms', 'hardware', 'contests'].map(async (collection) => {
+      const entries = await getCollection(collection);
+      return entries.map((entry) => ({
+        params: { collection, slug: entry.id.replace(/\.mdx$/, '') },
+        props: { entry },
+      }));
+    })
+  );
+  return groups.flat();
+}
+
+const { entry } = Astro.props;
+const { Content, headings } = await render(entry);
+---
+
+<ArticleLayout entry={entry} Content={Content} headings={headings} />
