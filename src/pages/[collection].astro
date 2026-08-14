@@ -28,15 +28,15 @@ const trackNames = { control: '控制', vision: '视觉', both: '控制+视觉' 
 const base = import.meta.env.BASE_URL;
 ---
 <BaseLayout title={names[collection]}>
-  <main style={`max-width:1100px;margin:0 auto;padding:2rem 1rem;`}>
-    <h1>{names[collection]}</h1>
-    <p style={`color:var(--muted);`}>{intros[collection]}</p>
-    <ul style={`list-style:none;padding:0;`}>
+  <main class="main-page">
+    <h1 style={`margin-bottom:0.3rem;`}>{names[collection]}</h1>
+    <p style={`color:var(--muted);margin-bottom:1.6rem;`}>{intros[collection]}</p>
+    <ul class="article-list">
       {entries.map((e) => (
-        <li style={`border-bottom:1px solid var(--line);padding:0.8rem 0;`}>
-          <a href={`${base}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`} style={`font-size:1.05rem;`}>{e.data.title}</a>
-          <span style={`color:var(--muted);font-size:0.85rem;margin-left:0.6rem;`}>{trackNames[e.data.track]}</span>
-          <p style={`margin:0.2rem 0 0;color:var(--muted);font-size:0.9rem;`}>{e.data.description}</p>
+        <li class="article-item">
+          <a class="title" href={`${base}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`}>{e.data.title}</a>
+          <span class="track">{trackNames[e.data.track]}</span>
+          <p class="desc">{e.data.description}</p>
         </li>
       ))}
     </ul>

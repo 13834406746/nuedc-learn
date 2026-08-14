@@ -3,8 +3,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 const pf = import.meta.env.BASE_URL;
 ---
 <BaseLayout title="搜索">
-  <main style={`max-width:900px;margin:0 auto;padding:2rem 1rem;`}>
-    <h1>搜索</h1>
+  <main class="main-page">
+    <h1 style={`margin-bottom:0.3rem;`}>搜索</h1>
+    <p style={`color:var(--muted);margin-bottom:1.6rem;`}>输入关键词检索全站内容，支持中文。</p>
     <div id="search"></div>
   </main>
   <link rel="stylesheet" href={`${pf}pagefind/pagefind-ui.css`} />
