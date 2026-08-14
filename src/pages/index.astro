@@ -2,37 +2,68 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 const base = import.meta.env.BASE_URL;
-const counts = {};
-for (const c of ['basics', 'algorithms', 'hardware', 'contests']) {
-  counts[c] = (await getCollection(c)).length;
-}
+
+const all = {
+  basics: await getCollection('basics'),
+  algorithms: await getCollection('algorithms'),
+  hardware: await getCollection('hardware'),
+  contests: await getCollection('contests'),
+};
+const total = all.basics.length + all.algorithms.length + all.hardware.length + all.contests.length;
+const controlCount = all.algorithms.filter((e) => e.data.track !== 'vision').length;
+const visionCount = all.algorithms.filter((e) => e.data.track !== 'control').length;
+
 const sections = [
-  { id: 'basics', name: '基础知识', desc: 'STM32 外设、传感器原理、Python 与 OpenCV 入门——巩固地基' },
-  { id: 'algorithms', name: '代码与算法', desc: 'PID、电机闭环、滤波、循迹、视觉识别与通信——本站核心' },
-  { id: 'hardware', name: '机械与硬件', desc: '车体、云台、安装与选型常识' },
-  { id: 'contests', name: '赛题解析', desc: '历年真题复盘，串起站内所有技术点' },
+  { id: 'basics', icon: '📚', name: '基础知识', desc: 'STM32 外设、传感器原理、Python 与 OpenCV 入门——巩固地基' },
+  { id: 'algorithms', icon: '⚙️', name: '代码与算法', desc: 'PID、电机闭环、滤波、循迹、视觉识别与通信——本站核心' },
+  { id: 'hardware', icon: '🔧', name: '机械与硬件', desc: '车体、云台、安装与选型常识' },
+  { id: 'contests', icon: '🏆', name: '赛题解析', desc: '历年真题复盘，串起站内所有技术点' },
 ];
 ---
 <BaseLayout title="首页">
   <main class="main-page">
     <div class="hero">
       <h1>电赛学习站</h1>
-      <p>个人备战知识库：控制类走<strong>进阶路线</strong>（串级 PID、调参方法论、姿态解算），视觉类走<strong>从零到实战路线</strong>（环境搭建 → 识别 → 与单片机联动）。所有内容以「跟着做能把题做出来」为标准。</p>
+      <p class="sub">
+        个人备战知识库：控制类走<strong>进阶路线</strong>（串级 PID、调参方法论、姿态解算），视觉类走<strong>从零到实战路线</strong>（环境搭建 → 识别 → 与单片机联动）。所有内容以「跟着做能把题做出来」为标准。
+      </p>
+      <div class="hero-stats">
+        <div class="hero-stat"><span class="num">{total}</span><span class="label">文章总数</span></div>
+        <div class="hero-stat"><span class="num">{controlCount}</span><span class="label">控制类算法</span></div>
+        <div class="hero-stat"><span class="num">{visionCount}</span><span class="label">视觉类算法</span></div>
+        <div class="hero-stat"><span class="num">{all.contests.length}</span><span class="label">赛题解析</span></div>
+      </div>
     </div>
+
     <div class="section-cards">
       {sections.map((s) => (
         <a class="section-card" href={`${base}${s.id}`}>
+          <span class="icon">{s.icon}</span>
           <span class="name">{s.name}</span>
-          <span class="count">（{counts[s.id]} 篇）</span>
+          <span class="count">（{all[s.id].length} 篇）</span>
           <p class="desc">{s.desc}</p>
         </a>
       ))}
     </div>
-    <h2 style={`margin-top:2.6rem;`}>两条学习主线</h2>
-    <p style={`color:var(--muted);`}>按主线顺序读，控制与视觉是两条独立进度；遇到不熟悉的环节随时跳到对应板块。</p>
-    <ul>
-      <li><strong>控制进阶</strong>：先读 <a href={`${base}docs/algorithms/control/pid-position`}>位置式 PID</a>，依次过增量式、串级、调参方法论、电机闭环。</li>
-      <li><strong>视觉从零</strong>：从 <a href={`${base}docs/algorithms/vision/vision-setup`}>环境搭建</a> 开始，经图像基础、颜色循迹，最后到 <a href={`${base}docs/algorithms/vision/vision-uart-protocol`}>与单片机通信</a>。</li>
-    </ul>
+
+    <h2 style={`margin-top:2.4rem;`}>两条学习主线</h2>
+    <div class="track-cards">
+      <div class="track-card">
+        <h3>🎯 控制进阶</h3>
+        <ul>
+          <li><a href={`${base}docs/algorithms/control/pid-position`}>位置式 PID</a> 打底</li>
+          <li>依次过 <a href={`${base}docs/algorithms/control/pid-incremental`}>增量式</a> → <a href={`${base}docs/algorithms/control/pid-cascade`}>串级</a> → <a href={`${base}docs/algorithms/control/pid-tuning`}>调参方法论</a></li>
+          <li>最后打通 <a href={`${base}docs/algorithms/control/motor-closed-loop`}>电机闭环</a> 实车链路</li>
+        </ul>
+      </div>
+      <div class="track-card">
+        <h3>👁️ 视觉从零</h3>
+        <ul>
+          <li><a href={`${base}docs/algorithms/vision/vision-setup`}>环境搭建</a> 起步（OpenMV 双路线）</li>
+          <li>经 <a href={`${base}docs/algorithms/vision/image-basics`}>图像基础</a> → <a href={`${base}docs/algorithms/vision/color-tracking`}>颜色循迹</a></li>
+          <li>最后打通 <a href={`${base}docs/algorithms/vision/vision-uart-protocol`}>与单片机通信</a> 联调</li>
+        </ul>
+      </div>
+    </div>
   </main>
 </BaseLayout>

@@ -30,8 +30,11 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
     <article>
       <h1>{entry.data.title}</h1>
       <p class="article-meta">
-        {trackNames[entry.data.track]} · {entry.data.date.toLocaleDateString('zh-CN')}
-        {entry.data.tags.length > 0 && ` · ${entry.data.tags.join(' / ')}`}
+        <span class="track-badge">{trackNames[entry.data.track]}</span>
+        <span>{entry.data.date.toLocaleDateString('zh-CN')}</span>
+        {entry.data.tags.map((t) => (
+          <span class="badge">{t}</span>
+        ))}
       </p>
       <Content />
       {

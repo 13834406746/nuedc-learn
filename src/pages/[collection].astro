@@ -35,7 +35,7 @@ const base = import.meta.env.BASE_URL;
       {entries.map((e) => (
         <li class="article-item">
           <a class="title" href={`${base}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`}>{e.data.title}</a>
-          <span class="track">{trackNames[e.data.track]}</span>
+          <span class="track-badge">{trackNames[e.data.track]}</span>
           <p class="desc">{e.data.description}</p>
         </li>
       ))}
