@@ -1,0 +1,21 @@
+{
+  "name": "nuedc-learn",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build && pagefind --site dist",
+    "preview": "astro preview",
+    "test": "node --test src/lib/"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^7.0.5",
+    "astro": "^7.2.2"
+  },
+  "devDependencies": {
+    "pagefind": "^1.5.2"
+  }
+}
