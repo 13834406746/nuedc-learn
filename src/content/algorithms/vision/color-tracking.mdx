@@ -1,0 +1,86 @@
+---
+title: 颜色识别与循迹：从色块到控制量
+description: 为什么不用 RGB 阈值、LAB 颜色空间、OpenMV 阈值编辑器与 find_blobs 完整循迹程序、从质心到控制量。
+track: vision
+tags: [颜色识别, find_blobs, 循迹]
+date: 2026-08-14
+resources:
+  - title: OpenMV 官方文档
+    url: https://docs.openmv.io/
+    note: find_blobs、阈值编辑器与 API 参考
+---
+
+颜色识别是视觉题的第二课，也是赛场上出场率最高的能力：循线、找靶标、区分色块、识别红点——全是「在图像里找一块特定颜色的东西，报告它的位置」。
+
+## 为什么不用 RGB 阈值
+
+直觉上「找红色」就是 `R > 200 且 G < 100 且 B < 100`。但 RGB 有个致命问题：**亮度耦合在颜色里**。同一个红色，光照强一点 (200, 50, 50)，暗一点 (100, 25, 25)——R/G/B 三个值一起变，阈值边界很难划，光照一抖就误判。
+
+解决办法是用**把颜色和亮度分开的空间**：HSV（色调/饱和度/明度）或 LAB。OpenMV 用的是 **LAB**：L 是亮度，A 是绿↔红轴，B 是蓝↔黄轴。做颜色识别时只卡 A、B 两轴（或加 L），亮度变化不敏感，鲁棒性天差地别。
+
+## OpenMV 阈值编辑器
+
+OpenMV IDE 自带阈值标定工具，这是你最重要的调参工具：
+
+1. IDE 菜单 **Tools → Machine Vision → Threshold Editor**
+2. 打开/拍摄一张目标场景的图
+3. 拖动 **L、A、B 六个通道的滑条**，直到画面里只剩目标颜色（白色 = 选中）
+4. 拷贝右下角生成的阈值元组，例如：
+
+```python
+RED_THRESH = (20, 60, 25, 65, -10, 30)   # (Lmin, Lmax, Amin, Amax, Bmin, Bmax)
+```
+
+这 6 个数就是「红色」在这个光照下的定义。比赛当天光照变了，第一件事就是重新标定阈值。
+
+## find_blobs 完整循迹程序
+
+OpenMV 的 `find_blobs` 把「找色块 + 算质心」全包了。循迹小车完整程序：
+
+```python
+import sensor, image, time, pyb
+
+sensor.reset()
+sensor.set_pixformat(sensor.RGB565)
+sensor.set_framesize(sensor.QQVGA)
+sensor.skip_frames(time=2000)
+
+uart = pyb.UART(3, 115200, timeout_char=1000)
+BLACK_LINE = (0, 30, -20, 20, -40, 20)   # 黑线 LAB 阈值（示例值，用阈值编辑器实标）
+
+while True:
+    img = sensor.snapshot()
+    blobs = img.find_blobs([BLACK_LINE], pixels_threshold=150,
+                           area_threshold=150, merge=True)
+    if blobs:
+        b = max(blobs, key=lambda x: x.pixels())   # 取最大色块
+        img.draw_rectangle(b.rect())
+        img.draw_cross(b.cx(), b.cy())
+        err = b.cx() - img.width() // 2            # 偏差：左负右正
+        # err 如何可靠地发给单片机，见下一篇《视觉与单片机通信》
+```
+
+逐段理解：
+
+- **`pixels_threshold` / `area_threshold`**：过滤噪声点。低于这个像素数的色块忽略——否则地上一块反光就当成线。
+- **`merge=True`**：把相邻的同类色块合并（线被障碍物分成几段时），不然一段线会被当成多个目标。
+- **取 `max(blobs, key=pixels)`**：赛场上可能有多个同类色块（比如红色干扰块），取最大的通常就是目标。根据题目的 ROI（感兴趣区域）裁剪搜索区（`img.binary` + `find_blobs` 前先 `img.set_roi`）能大幅提速并抗干扰。
+- **`b.cx()` 是色块质心横坐标**，0~159（QQVGA）。偏差 `err = cx - 80` 就是循迹的核心控制量。
+
+## 从质心到控制量
+
+循迹的本质：**把像素偏差变成转向指令**。err 的符号约定左负右正，幅值代表偏多少。
+
+发给单片机后怎么用？两种典型接法：
+
+- 简单法：`err` 乘一个增益直接作为差速（`左轮PWM = 基础 - K·err`），车会跟着线走，但转弯急时容易冲出去。
+- 标准法：err 作为**串级 PID 外环的目标角速度**（外环偏差 → 目标角速度 → 内环速度环），控制质量高一个档次。这也是为什么《串级 PID》那篇是控制类的核心——视觉给偏差，串级把偏差变成稳健的转向。
+
+发送周期注意对齐：**视觉帧率（约 30~50fps，20~33ms）和控制周期要匹配**，主控收到新数据的节拍别乱。
+
+## 常见坑
+
+- **阈值过严丢目标**：阈值太窄，光线稍变目标就没了。应对：丢失策略——连续 N 帧找不到就保持上次偏差 + 计时超时停车，而不是让车按 0 偏差直冲。
+- **场地反光**：光滑地面上的倒影会被当成色块。`area_threshold` 调大 + ROI 裁剪 + 补光避免直射反光。
+- **阈值编辑器对着屏幕调**：屏幕色温 ≠ 赛场灯光，必须实拍现场图再标定。
+- **忘记 `merge`**：线被影子切成几段，`merge=False` 时最大色块只是一小段，车会走歪。

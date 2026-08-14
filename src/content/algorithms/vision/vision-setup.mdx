@@ -1,0 +1,84 @@
+---
+title: 视觉开发环境：OpenMV 与 Python+OpenCV 两条路
+description: 零基础起步：OpenMV 开箱即用路线与 PC/树莓派 Python+OpenCV 路线的搭建、第一个程序与选型建议。
+track: vision
+tags: [环境搭建, OpenMV, OpenCV]
+date: 2026-08-14
+resources:
+  - title: OpenMV 官方文档
+    url: https://docs.openmv.io/
+    note: 固件、IDE 与 API 参考
+  - title: OpenCV 官方教程
+    url: https://docs.opencv.org/4.x/
+    note: Python 教程从 GUI 基础开始
+---
+
+视觉零基础的第一步不是学算法，是把环境跑起来、亲眼看到第一帧画面。电赛视觉有两条主流路线，先搞清楚区别再选。
+
+## 两条路怎么选
+
+| 维度 | OpenMV | PC/树莓派 + OpenCV |
+|------|--------|--------------------|
+| 本质 | 单片机上的微型视觉模块（STM32H7+摄像头） | 通用电脑/树莓派跑 Python |
+| 上手速度 | 最快：插上 USB 就是 IDE | 需要装环境，但都是 pip |
+| 算力 | 弱：QVGA 二值化/简单识别为主 | 强：可以做复杂识别、深度学习 |
+| 装车 | 直接装车上，串口连主控 | 树莓派装车，PC 只能调试用 |
+| 成本 | 数百元 | PC 免费；树莓派数百元 |
+| 典型用途 | 循迹、色块、数字识别、简单巡线 | 复杂识别、标定、快速原型 |
+
+**零基础起步建议 OpenMV**：一站到位、坑最少，第一周就能做出「识别色块 → 串口发坐标」的完整链路。**PC+OpenCV 作为算法学习环境**：在电脑上把原理搞清楚、把算法验证好，再移植到 OpenMV。两条路不冲突，这篇文章两条都带你跑通。
+
+## OpenMV 路线
+
+1. 官网下载安装 **OpenMV IDE**（Windows 一键装）
+2. USB 连上 OpenMV 摄像头，IDE 右下角 Connect，点 **帧缓冲** 图标能看到实时画面
+3. 新建文件粘贴下面的程序，点绿色三角运行：
+
+```python
+import sensor, image, time
+
+sensor.reset()                      # 初始化感光元件
+sensor.set_pixformat(sensor.RGB565) # 彩色
+sensor.set_framesize(sensor.QQVGA)  # 160x120，帧率优先
+sensor.skip_frames(time=2000)       # 等自动增益/白平衡稳定
+
+while True:
+    img = sensor.snapshot()
+    # 此处做识别
+```
+
+看到帧缓冲窗口里连续的画面，环境就通了。`sensor.skip_frames` 很重要——摄像头刚上电时自动增益/白平衡没稳定，前几帧颜色是偏的，跳过 2 秒再取图。
+
+## Python + OpenCV 路线
+
+```bash
+pip install opencv-python numpy
+# 国内网络慢就加镜像：
+# pip install opencv-python numpy -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+第一个程序——打开摄像头实时显示：
+
+```python
+import cv2
+
+cap = cv2.VideoCapture(0)           # 0=默认摄像头
+while True:
+    ok, frame = cap.read()
+    if not ok:
+        break
+    cv2.imshow('camera', frame)
+    if cv2.waitKey(1) == 27:        # ESC 退出
+        break
+cap.release()
+cv2.destroyAllWindows()
+```
+
+`cv2.imshow` 会弹窗口。注意 OpenCV 的图片是 **BGR** 顺序（不是 RGB），后面所有颜色处理都要记住这一点。跑通后建议用 Jupyter Notebook 做实验——可以一步步看中间结果，比 print 调试舒服得多。
+
+## 常见坑
+
+- **摄像头被占用**：`cap = cv2.VideoCapture(0)` 失败或黑屏，先关掉其他占着摄像头的程序（微信、浏览器、OBS）。
+- **树莓派 CSI 摄像头**：不能用 `VideoCapture(0)`，要走 `libcamera`（`libcamera-hello` 测试，OpenCV 用 GStreamer 后端接）。USB 摄像头在树莓派上则和 PC 一样。
+- **不建虚拟环境**：系统 Python 直接 pip 装，装坏了难收拾。`python -m venv .venv` 建虚拟环境，激活后在里面装包，一条命令的事，省掉无数坑。
+- **OpenMV IDE 连不上板子**：换根数据线（要能传数据的，不能是充电线），这是最常见的原因。
