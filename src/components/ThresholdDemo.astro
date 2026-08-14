@@ -1,0 +1,73 @@
+---
+// 图像二值化演示：左侧合成场景（浅色地面 + 深色赛道 + 白色障碍块 + 表盘式圆形），
+// 拖阈值滑块，右侧实时显示二值化结果。
+---
+<div class="demo-box" id="thr-demo">
+  <noscript><p>启用 JavaScript 后可在本页交互式调阈值。</p></noscript>
+  <label>二值化阈值
+    <input type="range" id="thr-t" min="0" max="255" step="1" value="110" />
+    <output id="thr-t-o">110</output>
+  </label>
+  <div style={`display:grid;grid-template-columns:1fr 1fr;gap:1rem;`}>
+    <canvas id="thr-src" width="420" height="280"></canvas>
+    <canvas id="thr-dst" width="420" height="280"></canvas>
+  </div>
+  <p class="demo-metrics" id="thr-metrics"></p>
+</div>
+
+<script>
+  import { rgbaToGray, binarize } from '../lib/threshold.js';
+
+  const $ = (id) => document.getElementById(id);
+  const src = $('thr-src'), dst = $('thr-dst');
+  const sctx = src.getContext('2d'), dctx = dst.getContext('2d');
+
+  function drawScene() {
+    // 合成场景：光照不均（线性渐变）+ 深色赛道 + 白障碍 + 灰圆
+    const g = sctx.createLinearGradient(0, 0, src.width, 0);
+    g.addColorStop(0, '#d8d8d8');
+    g.addColorStop(1, '#a8a8a8');
+    sctx.fillStyle = g;
+    sctx.fillRect(0, 0, src.width, src.height);
+    sctx.fillStyle = '#3a3a3a';                       // 赛道（深）
+    sctx.beginPath();
+    sctx.moveTo(60, 0);
+    sctx.bezierCurveTo(180, 100, 240, 180, 150, 280);
+    sctx.lineTo(60, 280);
+    sctx.bezierCurveTo(160, 190, 110, 90, 30, 0);
+    sctx.closePath();
+    sctx.fill();
+    sctx.fillStyle = '#f0f0f0';                       // 障碍（白）
+    sctx.fillRect(300, 60, 40, 40);
+    sctx.fillRect(330, 170, 30, 30);
+    sctx.fillStyle = '#909090';                       // 灰度干扰块
+    sctx.beginPath();
+    sctx.arc(250, 90, 28, 0, Math.PI * 2);
+    sctx.fill();
+    sctx.fillStyle = '#111';
+    sctx.font = 'bold 28px monospace';
+    sctx.fillText('3.14', 90, 250);                   // 表盘数字
+  }
+
+  function apply() {
+    const t = parseInt($('thr-t').value, 10);
+    $('thr-t-o').value = t;
+    const img = sctx.getImageData(0, 0, src.width, src.height);
+    const gray = rgbaToGray(img.data);
+    const bin = binarize(gray, t);
+    const out = dctx.createImageData(src.width, src.height);
+    for (let i = 0; i < bin.length; i++) {
+      out.data[i * 4] = out.data[i * 4 + 1] = out.data[i * 4 + 2] = bin[i];
+      out.data[i * 4 + 3] = 255;
+    }
+    dctx.putImageData(out, 0, 0);
+    let white = 0;
+    for (const v of bin) if (v) white++;
+    $('thr-metrics').textContent =
+      `白色像素占比 ${(white / bin.length * 100).toFixed(1)}% —— 想想：循迹要的是赛道还是背景为白？阈值变了会怎样？`;
+  }
+
+  drawScene();
+  $('thr-t').addEventListener('input', apply);
+  apply();
+</script>
