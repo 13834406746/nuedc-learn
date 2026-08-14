@@ -1,0 +1,85 @@
+---
+title: 增量式 PID：什么时候比位置式更好
+description: 增量式 PID 的推导、C 实现，以及和位置式的对比——执行器自带积分（步进电机、舵机）时增量式是更优解。
+track: control
+tags: [PID, 控制]
+date: 2026-08-14
+resources:
+  - title: Improving the Beginner's PID（Brett Beauregard 经典系列）
+    url: https://brettbeauregard.com/blog/2011/04/improving-the-beginners-pid-introduction/
+    note: 增量式讨论见「Derivative Kick」等章节
+---
+
+上一篇的位置式 PID 输出的是**控制量本身**（PWM 占空比、电流）。但电赛里有一大类执行器不是「给个量」而是「给个增量」的——步进电机、舵机、阀门。给步进电机一个「总脉冲数」没意义，它要的是「这一步走多少」；让舵机转到目标角度，位置式算出的 PWM 概念也不对。这类场景用**增量式 PID**。
+
+## 推导
+
+增量式的思路：不直接算 u[k]，而是算**本次输出相对上次的增量 Δu**。由位置式
+
+```
+u[k]   = Kp·e[k] + Ki·(Σe[k])·dt + Kd·(e[k]−e[k−1])/dt
+u[k−1] = Kp·e[k−1] + Ki·(Σe[k−1])·dt + Kd·(e[k−1]−e[k−2])/dt
+```
+
+两式相减，积分项和微分项里的相邻项抵消，得到：
+
+```
+Δu[k] = Kp·(e[k]−e[k−1]) + Ki·e[k]·dt + Kd·(e[k]−2·e[k−1]+e[k−2])/dt
+```
+
+输出由 `u[k] = u[k−1] + Δu[k]` 递推得到。注意：**位置式里的积分器，在增量式里变成了执行器本身**——Δu 累加的过程就是积分。这意味着增量式天生没有积分饱和问题（误差一直存在时 Δu 不会无限增长，只是每次加一点）。
+
+## C 代码实现
+
+在上一篇的 `PID_t` 基础上加两个成员：`prev_err2`（上上次误差）和 `prev_out`（上次输出）：
+
+```c
+typedef struct {
+    float kp, ki, kd;
+    float prev_err;      /* 上次误差 */
+    float prev_err2;     /* 上上次误差 */
+    float prev_out;      /* 上次输出（累加器） */
+    float out_max;       /* 输出限幅 */
+} PID_t;
+
+/* 返回的是增量 Δu：本次输出 = 上次输出 + 返回值 */
+float PID_Incremental(PID_t *pid, float setpoint, float feedback)
+{
+    float err = setpoint - feedback;
+    float incr = pid->kp * (err - pid->prev_err)
+               + pid->ki * err
+               + pid->kd * (err - 2 * pid->prev_err + pid->prev_err2);
+    pid->prev_err2 = pid->prev_err;
+    pid->prev_err  = err;
+
+    float out = pid->prev_out + incr;
+    if (out >  pid->out_max) out =  pid->out_max;
+    if (out < -pid->out_max) out = -pid->out_max;
+    pid->prev_out = out;
+    return out;
+}
+```
+
+注意两个细节：
+
+- 这里 ki/kd 已经按上一篇的方式吸收了 dt，所以 Ki 项直接用 `err` 而不再乘 dt。
+- **输出限幅必须做在累加后的总量上**，不能只限 Δu——否则 prev_out 悄悄越过执行器极限，恢复时会产生意外的连续步进。
+
+## 位置式 vs 增量式
+
+| 维度 | 位置式 | 增量式 |
+|------|--------|--------|
+| 输出含义 | 控制量本身（PWM、电流） | 控制量增量（Δu） |
+| 执行器类型 | 需要持续输入量的（H 桥、油门） | 自带积分的（步进电机、舵机、阀门） |
+| 积分饱和 | 需要显式抗饱和（积分限幅） | 天然免疫（积分在执行器上） |
+| 掉电重启 | 输出丢失，需重新初始化 | 同上，但 Δu 递推从 0 起步更温和 |
+| 手动/自动切换 | 切换瞬间输出跳变（bumpless 需额外处理） | 切换平滑，增量小 |
+| 故障表现 | 输出突变明显 | 输出渐变，更安全 |
+
+一句话选型：**给步进电机 / 舵机这类「接受增量」的执行器用增量式；给 H 桥、油门这类「接受连续量」的执行器用位置式。** 增量式在步进电机云台、步进小车里几乎是标配。
+
+## 常见坑
+
+- **限幅位置**：只限 Δu 不限总量，恢复时爆冲。必须 `out = prev_out + incr` 之后再限幅。
+- **prev_out 初始化**：上电时 prev_out 应从 0 开始（或执行器当前实际位置），否则第一个增量会从 0 跳变。
+- **D 项对噪声敏感依旧**：增量式只是把积分问题转移给了执行器，D 项放大噪声的问题两式都有，需要滤波配合。
