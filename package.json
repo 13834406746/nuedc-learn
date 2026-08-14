@@ -9,7 +9,7 @@
     "dev": "astro dev",
     "build": "node scripts/clean-astro-cache.mjs && astro build && pagefind --site dist",
     "preview": "astro preview",
-    "test": "node --test src/lib/"
+    "test": "node --test \"src/lib/*.test.js\""
   },
   "dependencies": {
     "@astrojs/mdx": "^7.0.5",
