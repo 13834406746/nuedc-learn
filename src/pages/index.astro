@@ -33,6 +33,7 @@ const sections = [
         <div class="hero-stat"><span class="num">{visionCount}</span><span class="label">视觉类算法</span></div>
         <div class="hero-stat"><span class="num">{all.contests.length}</span><span class="label">赛题解析</span></div>
       </div>
+      <a class="hero-cta" href={`${base}path`}>开始学习 →</a>
     </div>
 
     <div class="section-cards">
@@ -49,7 +50,7 @@ const sections = [
     <h2 style={`margin-top:2.4rem;`}>两条学习主线</h2>
     <div class="track-cards">
       <div class="track-card">
-        <h3>🎯 控制进阶</h3>
+        <h3>🎯 控制进阶 <a class="track-more" href={`${base}path`}>完整路径 →</a></h3>
         <ul>
           <li><a href={`${base}docs/algorithms/control/pid-position`}>位置式 PID</a> 打底</li>
           <li>依次过 <a href={`${base}docs/algorithms/control/pid-incremental`}>增量式</a> → <a href={`${base}docs/algorithms/control/pid-cascade`}>串级</a> → <a href={`${base}docs/algorithms/control/pid-tuning`}>调参方法论</a></li>
@@ -57,7 +58,7 @@ const sections = [
         </ul>
       </div>
       <div class="track-card">
-        <h3>👁️ 视觉从零</h3>
+        <h3>👁️ 视觉从零 <a class="track-more" href={`${base}path`}>完整路径 →</a></h3>
         <ul>
           <li><a href={`${base}docs/algorithms/vision/vision-setup`}>环境搭建</a> 起步（OpenMV 双路线）</li>
           <li>经 <a href={`${base}docs/algorithms/vision/image-basics`}>图像基础</a> → <a href={`${base}docs/algorithms/vision/color-tracking`}>颜色循迹</a></li>

@@ -1,6 +1,7 @@
 ---
 import BaseLayout from './BaseLayout.astro';
 import { getCollection } from 'astro:content';
+import { findStep, paths, slugOf } from '../config/paths';
 
 const { entry, Content, headings } = Astro.props;
 
@@ -11,11 +12,37 @@ const sectionNames = {
   contests: '赛题解析',
 };
 const section = entry.collection;
-const siblings = (await getCollection(section))
+// 侧栏按学习路径顺序排，路径外文章按日期排
+const pathOrder = new Map();
+for (const p of paths) {
+  p.steps.forEach((slug, i) => pathOrder.set(slug, i));
+}
+const allSiblings = await getCollection(section);
+const sibInPath = allSiblings
+  .filter((e) => pathOrder.has(slugOf(e.collection, e.id)))
+  .sort((a, b) => pathOrder.get(slugOf(a.collection, a.id)) - pathOrder.get(slugOf(b.collection, b.id)));
+const sibOutside = allSiblings
+  .filter((e) => !pathOrder.has(slugOf(e.collection, e.id)))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+const siblings = [...sibInPath, ...sibOutside];
 
 const trackNames = { control: '控制', vision: '视觉', both: '控制+视觉' };
 const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+
+// 学习路径定位：当前文章在第几关、上一篇/下一篇是谁
+const currentSlug = slugOf(entry.collection, entry.id);
+const step = findStep(currentSlug);
+const base = import.meta.env.BASE_URL;
+let prev = null, next = null, stepNum = 0;
+if (step) {
+  stepNum = step.index + 1;
+  if (step.index > 0) prev = step.path.steps[step.index - 1];
+  if (step.index < step.path.steps.length - 1) next = step.path.steps[step.index + 1];
+}
+const hrefOf = (slug) => {
+  const [col, ...rest] = slug.split('/');
+  return `${base}docs/${col}/${rest.join('/')}`;
+};
 ---
 <BaseLayout title={entry.data.title}>
   <div class="three-col">
@@ -23,7 +50,7 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
       <h3>{sectionNames[section]}（{siblings.length}）</h3>
       <ul>
         {siblings.map((e) => (
-          <li><a href={`${import.meta.env.BASE_URL}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`} aria-current={e.id === entry.id ? 'page' : undefined}>{e.data.title}</a></li>
+          <li><a href={`${base}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`} aria-current={e.id === entry.id ? 'page' : undefined}>{e.data.title}</a></li>
         ))}
       </ul>
     </aside>
@@ -31,6 +58,7 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
       <h1>{entry.data.title}</h1>
       <p class="article-meta">
         <span class="track-badge">{trackNames[entry.data.track]}</span>
+        {step && <span class="badge path-step-badge">{step.path.icon} {step.path.title} · 第 {stepNum} 关 / 共 {step.path.steps.length} 关</span>}
         <span>{entry.data.date.toLocaleDateString('zh-CN')}</span>
         {entry.data.tags.map((t) => (
           <span class="badge">{t}</span>
@@ -49,6 +77,18 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
           </div>
         )
       }
+      {
+        (prev || next) && (
+          <nav class="prev-next">
+            {prev
+              ? <a class="pn-btn" href={hrefOf(prev)}><span class="pn-dir">← 上一篇</span><span class="pn-title">进入上一篇</span></a>
+              : <span></span>}
+            {next
+              ? <a class="pn-btn primary" href={hrefOf(next)}><span class="pn-dir">下一篇 →</span><span class="pn-title">继续学习</span></a>
+              : <span></span>}
+          </nav>
+        )
+      }
     </article>
     <nav class="toc" aria-label="本页目录">
       <h3>本页目录</h3>
@@ -59,4 +99,16 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
       </ul>
     </nav>
   </div>
+  <script is:inline>
+    // 打开文章即标记为已读（进度存 localStorage，学习路径页读取）
+    const readKey = 'nuedc-read';
+    const readSlug = {currentSlug};
+    try {
+      const arr = JSON.parse(localStorage.getItem(readKey) || '[]');
+      if (!arr.includes(readSlug)) {
+        arr.push(readSlug);
+        localStorage.setItem(readKey, JSON.stringify(arr));
+      }
+    } catch (e) { /* localStorage 不可用时静默降级 */ }
+  </script>
 </BaseLayout>

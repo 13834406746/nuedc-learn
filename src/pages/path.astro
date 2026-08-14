@@ -1,0 +1,100 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { paths, slugOf } from '../config/paths';
+
+const base = import.meta.env.BASE_URL;
+
+// slug → 文章条目 映射（路径页、编号都用它）
+const entryMap = {};
+for (const c of ['basics', 'algorithms', 'hardware', 'contests']) {
+  for (const e of await getCollection(c)) {
+    entryMap[slugOf(e.collection, e.id)] = e;
+  }
+}
+const hrefOf = (slug) => {
+  const [col, ...rest] = slug.split('/');
+  return `${base}docs/${col}/${rest.join('/')}`;
+};
+---
+<BaseLayout title="学习路径">
+  <main class="main-page path-page">
+    <div class="path-hero">
+      <h1>学习路径</h1>
+      <p>按主线顺序学习，读完自动标记进度（进度保存在本机浏览器，不会丢失）。控制与视觉两条主线独立推进——建议先完整走通一条，再补另一条。</p>
+    </div>
+
+    {paths.map((p) => (
+      <section class="path-line" data-path={p.id}>
+        <div class="path-line-head">
+          <h2>{p.icon} {p.title} 主线</h2>
+          <span class="path-progress-text" data-progress-text>0 / {p.steps.length} 已完成</span>
+        </div>
+        <div class="path-progress"><div class="fill" data-progress-fill style={`width:0%`}></div></div>
+        <ol class="path-steps">
+          {p.steps.map((slug, i) => {
+            const e = entryMap[slug];
+            if (!e) return null;
+            return (
+              <li class="path-step" data-slug={slug} data-index={i}>
+                <span class="step-state" data-state></span>
+                <span class="step-num">{i + 1}</span>
+                <a class="step-title" href={hrefOf(slug)}>{e.data.title}</a>
+                <span class="step-check" data-check></span>
+                <a class="step-go" data-go href={hrefOf(slug)}>去读</a>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+    ))}
+
+    <button class="path-reset" id="path-reset">重置全部进度</button>
+  </main>
+
+  <script is:inline>
+    (function () {
+      const readKey = 'nuedc-read';
+      let read = [];
+      try { read = JSON.parse(localStorage.getItem(readKey) || '[]'); } catch (e) { /* 静默降级 */ }
+
+      document.querySelectorAll('.path-line').forEach(function (line) {
+        const steps = Array.prototype.slice.call(line.querySelectorAll('.path-step'));
+        const fill = line.querySelector('[data-progress-fill]');
+        const text = line.querySelector('[data-progress-text]');
+
+        function render() {
+          let done = 0;
+          steps.forEach(function (s) {
+            const isDone = read.indexOf(s.dataset.slug) >= 0;
+            if (isDone) done++;
+            s.classList.toggle('done', isDone);
+            const state = s.querySelector('[data-state]');
+            const check = s.querySelector('[data-check]');
+            state.textContent = isDone ? '✓' : '';
+            check.textContent = isDone ? '已读' : '';
+          });
+          // 当前关 = 第一个未读
+          let current = -1;
+          steps.forEach(function (s, i) {
+            if (current < 0 && read.indexOf(s.dataset.slug) < 0) current = i;
+          });
+          steps.forEach(function (s, i) {
+            s.classList.toggle('current', i === current);
+            s.querySelector('[data-go]').style.display = i === current ? 'inline-block' : 'none';
+          });
+          const total = steps.length;
+          const pct = total ? Math.round((done / total) * 100) : 0;
+          fill.style.width = pct + '%';
+          text.textContent = done + ' / ' + total + ' 已完成（' + pct + '%）';
+        }
+        render();
+      });
+
+      document.getElementById('path-reset').addEventListener('click', function () {
+        localStorage.removeItem(readKey);
+        location.reload();
+      });
+    })();
+  </script>
+</BaseLayout>

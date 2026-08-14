@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
+import { paths, slugOf } from '../config/paths';
 
 export async function getStaticPaths() {
   return ['basics', 'algorithms', 'hardware', 'contests'].map((collection) => ({
@@ -21,24 +22,43 @@ const intros = {
   hardware: '车体、云台与安装常识，影响上限的部分。',
   contests: '历年真题复盘：方案分析 + 技术点索引。',
 };
-const entries = (await getCollection(collection)).sort(
-  (a, b) => b.data.date.valueOf() - a.data.date.valueOf()
-);
 const trackNames = { control: '控制', vision: '视觉', both: '控制+视觉' };
 const base = import.meta.env.BASE_URL;
+
+// 路径内文章按学习顺序排并编号；路径外文章按日期排在后面
+const pathOrder = new Map();
+for (const p of paths) {
+  p.steps.forEach((slug, i) => pathOrder.set(slug, { num: i + 1, pathTitle: p.title }));
+}
+
+const all = await getCollection(collection);
+const inPath = all
+  .filter((e) => pathOrder.has(slugOf(e.collection, e.id)))
+  .sort((a, b) => pathOrder.get(slugOf(a.collection, a.id)).num - pathOrder.get(slugOf(b.collection, b.id)).num);
+const outside = all
+  .filter((e) => !pathOrder.has(slugOf(e.collection, e.id)))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+const entries = [...inPath, ...outside];
 ---
 <BaseLayout title={names[collection]}>
   <main class="main-page">
     <h1 style={`margin-bottom:0.3rem;`}>{names[collection]}</h1>
     <p style={`color:var(--muted);margin-bottom:1.6rem;`}>{intros[collection]}</p>
     <ul class="article-list">
-      {entries.map((e) => (
-        <li class="article-item">
-          <a class="title" href={`${base}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`}>{e.data.title}</a>
-          <span class="track-badge">{trackNames[e.data.track]}</span>
-          <p class="desc">{e.data.description}</p>
-        </li>
-      ))}
+      {entries.map((e) => {
+        const meta = pathOrder.get(slugOf(e.collection, e.id));
+        return (
+          <li class="article-item">
+            <a class="title" href={`${base}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`}>
+              {meta && <span class="path-num">{String(meta.num).padStart(2, '0')}</span>}
+              {e.data.title}
+            </a>
+            <span class="track-badge">{trackNames[e.data.track]}</span>
+            {meta && <span class="path-tag">{meta.pathTitle}主线</span>}
+            <p class="desc">{e.data.description}</p>
+          </li>
+        );
+      })}
     </ul>
   </main>
 </BaseLayout>
