@@ -1,0 +1,83 @@
+---
+title: STM32 串口接收：中断、空闲中断+DMA 与环形缓冲
+description: 三种接收方案对比、环形缓冲的设计要点、IDLE+DMA+ringbuf 代码框架，以及新手必踩的坑。
+track: control
+tags: [串口, DMA, ringbuf]
+date: 2026-08-14
+resources:
+  - title: STM32 参考手册（RM0008）
+    url: https://www.st.com/resource/en/reference_manual/rm0008-stm32f101xx-stm32f102xx-stm32f103xx-stm32f105xx-and-stm32f107xx-advanced-armbased-32bit-mcus-st-microelectronics.pdf
+    note: USART 与 DMA 章节的权威定义
+---
+
+控制题里串口几乎是万能接口：蓝牙遥控、视觉数据、传感器读数、调试输出。接收做不好，一切上层协议都是空中楼阁。这篇把 STM32 串口接收的三种方案和环形缓冲讲透——这也是本站视觉通信协议篇的基础。
+
+## 三种接收方案对比
+
+| 方案 | 原理 | 优点 | 缺点 |
+|------|------|------|------|
+| 逐字节中断 | 每收 1 字节进一次中断 | 实现最简单 | 高频数据下中断频繁，占用 CPU |
+| **空闲中断 + DMA** | DMA 自动搬运，收到一帧空闲时触发中断 | CPU 占用极低，适合高频帧 | 需要理解 DMA 与空闲中断配合 |
+| 双缓冲 DMA | 两个缓冲区轮换 | 连续不间断接收 | 实现最复杂 |
+
+**首选 IDLE + DMA**：电赛串口数据（视觉帧、遥控帧）都是「不定长一帧一帧」来的，IDLE 中断天然按帧切分，DMA 不占 CPU。这也是本站实战采用的做法（见下方框架）。
+
+## 环形缓冲：无锁的跨界数据通道
+
+ISR（中断）和主循环是两个世界，共享数据必须过环形缓冲。设计要点：
+
+- **head/tail 只在各自上下文写**：ISR 写 head，主循环写 tail（消费），各自只读对方的指针——天然免锁，不需要关中断。这是 ringbuf 的精髓。
+- **`volatile` 必须加**：`extern volatile uint16_t ringbuf_head;` 等。不加的话，编译器可能把「看起来没变」的变量优化掉，主循环永远读不到新数据——这是新手最隐蔽的坑。
+- **判满留一格**：`(head + 1) % SIZE == tail` 视为满。留一格是为了区分「空」和「满」（两者都满足 head == tail）。
+- **大小取 2 的幂**：`SIZE = 256` 时 `head & (SIZE-1)` 比取模快，溢出环回天然正确。
+
+## IDLE + DMA + ringbuf 代码框架
+
+以 USART2 为例（视觉数据通道，配置见项目源码），核心思想：**DMA 把数据源源不断搬进缓冲区，IDLE 中断标记「一帧到齐」，主循环按帧解析**。
+
+```c
+/* ---- 配置：USART2 开 DMA 接收 + IDLE 中断 ---- */
+#define RX_BUF_SIZE  64
+
+uint8_t   dma_rx_buf[RX_BUF_SIZE];       /* DMA 搬运目的地 */
+volatile uint16_t ringbuf_head = 0;      /* ISR 写 */
+volatile uint16_t ringbuf_tail = 0;      /* 主循环写 */
+volatile uint8_t  frame_ready_flag = 0;  /* IDLE 置位，主循环清除 */
+
+void USART2_IRQHandler(void)
+{
+    if (USART_GetITStatus(USART2, USART_IT_IDLE)) {
+        USART_ReceiveData(USART2);        /* 读 DR 清 IDLE 标志（关键！） */
+        uint16_t len = RX_BUF_SIZE - DMA_GetCurrDataCounter(DMA1_Channel5);
+        /* 把 len 个新字节写进 ringbuf，head 递增（注意 len==SIZE 的满帧处理） */
+        for (uint16_t i = 0; i < len; i++)
+            ringbuf[ringbuf_head++ & (SIZE-1)] = dma_rx_buf[i];
+        DMA_SetCurrDataCounter(DMA1_Channel5, RX_BUF_SIZE);  /* 重新装填 */
+        DMA_Cmd(DMA1_Channel5, DISABLE);  /* 标准流程：先禁再启 */
+        DMA_Cmd(DMA1_Channel5, ENABLE);
+        frame_ready_flag = 1;
+    }
+}
+```
+
+主循环侧：
+
+```c
+/* 主循环（或在定时器里）：有帧标志就消费 ringbuf，喂给协议状态机 */
+while (frame_ready_flag) {
+    frame_ready_flag = 0;
+    while (ringbuf_tail != ringbuf_head) {
+        uint8_t b = ringbuf[ringbuf_tail++ & (SIZE-1)];
+        Vision_ParseByte(b);   /* 帧协议解析，见视觉通信篇 */
+    }
+}
+```
+
+这套结构把「收」和「解析」彻底解耦：ISR 只负责搬数据，解析逻辑全在主循环，改协议不动接收代码。
+
+## 常见坑
+
+- **不清 IDLE 标志**：读 DR 是清 IDLE 的标准动作，漏了会进一次中断就死循环或反复触发。这是 IDLE 用法第一坑。
+- **DMA 半满陷阱**：开了 DMA 半传输中断但没处理，缓冲区前半被覆盖。用 IDLE 方案时**不要**同时开 DMA 半满中断。
+- **printf 重定向冲突**：`fputc` 重定向到 USART1 同时开 DMA 接收没问题，但别把调试打印和协议数据混在同一根线上——调试信息会污染协议帧。预留两个串口（一个打印一个通信）是电赛标配。
+- **帧长超过缓冲区**：一帧 64 字节 DMA 装不下会截断。按最大帧长定缓冲区，或协议里加长度字段分段处理。
