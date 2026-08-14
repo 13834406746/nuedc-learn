@@ -1,0 +1,106 @@
+---
+title: ADC 与模拟量采集：把电压变成数字
+description: ADC 原理、分辨率、单通道采集与 DMA 多通道——电位器、灰度模拟版、电池电压检测全靠它。
+track: control
+tags: [ADC, 模拟量, 基础]
+date: 2026-08-14
+---
+
+数字世界只能处理 0/1，但现实是连续的电压——电位器角度、电池电压、模拟灰度输出。ADC（模数转换器）就是把电压变成数字的桥。
+
+## ADC 是什么
+
+STM32F1 的 ADC 是 **12 位**：输入电压 0~3.3V 被量化成 0~4095。
+
+```
+数字值 = 电压 / 3.3V × 4096
+```
+
+分辨率：12 位 ≈ 0.8mV/LSB。选型判断：12 位对电赛绝大多数场景足够（电位器、电压检测不需要更高精度）。
+
+**注意 STM32 的 ADC 输入不能超过 3.3V**（F1 系列）——接 5V 信号必须分压，否则烧引脚。
+
+## 单通道采集
+
+```c
+/* 配置 PA1 为模拟输入 + ADC1 通道 1 */
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1 | RCC_APB2Periph_GPIOA, ENABLE);
+RCC_ADCCLKConfig(RCC_PCLK2_Div6);          /* ADC 时钟 ≤ 14MHz */
+
+GPIO_InitTypeDef g;
+g.GPIO_Pin = GPIO_Pin_1;
+g.GPIO_Mode = GPIO_Mode_AIN;               /* 模拟输入 */
+GPIO_Init(GPIOA, &g);
+
+ADC_InitTypeDef a;
+a.ADC_Mode = ADC_Mode_Independent;
+a.ADC_ScanConvMode = DISABLE;
+a.ADC_ContinuousConvMode = DISABLE;        /* 单次转换 */
+a.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
+a.ADC_DataAlign = ADC_DataAlign_Right;
+a.ADC_NbrOfChannel = 1;
+ADC_Init(ADC1, &a);
+ADC_RegularChannelConfig(ADC1, ADC_Channel_1, 1, ADC_SampleTime_55Cycles5);
+ADC_Cmd(ADC1, ENABLE);
+```
+
+读一次：
+
+```c
+uint16_t ADC_Read(void)
+{
+    ADC_SoftwareStartConvCmd(ADC1, ENABLE);       /* 启动转换 */
+    while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);  /* 等转换完成 */
+    return ADC_GetConversionValue(ADC1);
+}
+```
+
+**采样时间**（`ADC_SampleTime`）：采样时间越长越准（阻抗匹配），55.5 周期是常用中庸值。信号源内阻大（电位器）就加长采样时间。
+
+## 电压换算与滤波
+
+原始值 → 电压 → 物理量：
+
+```c
+float v = adc_val * 3.3f / 4096.0f;              /* 电压 */
+float battery = v * 2.0f;                        /* 分压 1:1，乘回真实值 */
+```
+
+模拟读数会抖（噪声、电源纹波），**软件滤波**是标配——滑动平均最常用：
+
+```c
+#define FILTER_N 8
+uint32_t sum = 0;
+static uint16_t buf[FILTER_N];
+static uint8_t idx = 0;
+
+sum -= buf[idx];
+buf[idx] = adc_val;
+sum += buf[idx];
+idx = (idx + 1) % FILTER_N;
+float filtered = (float)sum / FILTER_N;
+```
+
+## 多通道 + DMA
+
+要同时采多个通道（比如 3 路灰度），轮询逐个读会占用 CPU。**扫描模式 + DMA**：
+
+```c
+a.ADC_ScanConvMode = ENABLE;      /* 扫描模式 */
+a.ADC_ContinuousConvMode = ENABLE;
+a.ADC_NbrOfChannel = 3;
+/* 配置 3 个通道：ADC_RegularChannelConfig(ADC1, CH_x, 序号, 采样时间) */
+/* DMA 配置：外设=ADC1_DR，内存=uint16_t buf[3]，方向外设→内存，循环模式 */
+DMA_Cmd(DMA1_Channel1, ENABLE);
+ADC_DMACmd(ADC1, ENABLE);
+ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+```
+
+DMA 自动把 3 个通道的结果搬进 `buf[3]`（对应通道顺序），主循环随时读 `buf`，CPU 零负担。这就是「扫描 + DMA」的经典组合。
+
+## 常见坑
+
+- **输入超压烧引脚**：ADC 输入超过 3.3V（F1）必烧。5V 信号先分压（10k + 6.2k ≈ 3.1V）。
+- **采样时间太短读数乱跳**：内阻大的信号源，采样时间不足，读数不稳定。加大 `ADC_SampleTime` 或加滤波。
+- **忘了开 ADC 时钟和校准**：F1 的 ADC 上电后建议做一次校准（`ADC_ResetCalibration`/`ADC_StartCalibration`），不开校准精度会差一点。
+- **多通道顺序搞混**：DMA 数组下标对应 `ADC_RegularChannelConfig` 的配置顺序，改通道顺序要同步改数组解读。

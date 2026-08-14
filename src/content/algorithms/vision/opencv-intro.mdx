@@ -1,0 +1,111 @@
+---
+title: OpenCV 入门：图像的基本操作
+description: 读图、显示、保存、裁剪、缩放、画图——PC 上验证视觉算法的第一步，与 OpenMV 对照学习。
+track: vision
+tags: [OpenCV, 图像, 基础]
+date: 2026-08-14
+resources:
+  - title: OpenCV 官方教程
+    url: https://docs.opencv.org/4.x/
+    note: Python 教程从 GUI 基础开始
+---
+
+PC 上用 OpenCV 做视觉算法验证，比直接在 OpenMV 上试快十倍：能看中间结果、能调参、能跑复杂算法。这篇带你跑通 OpenCV 的基础操作——读图、显示、裁剪、画图，这些是后面所有视觉文章的地基。
+
+## 安装与环境
+
+```bash
+pip install opencv-python numpy
+# 慢就换清华镜像：
+# pip install opencv-python numpy -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+建议用 Jupyter Notebook 做实验（`pip install jupyter`，`jupyter notebook` 启动）——一步步看结果，比脚本舒服。
+
+## 读图、显示、保存
+
+```python
+import cv2
+
+img = cv2.imread("track.jpg")      # 读图：彩色图是 (高, 宽, 3) 的数组
+print(img.shape)                   # 例如 (480, 640, 3)：高480 宽640 3通道
+
+cv2.imshow("window", img)          # 显示
+cv2.waitKey(0)                     # 等按键（0=无限等），窗口不写这句会闪退
+cv2.destroyAllWindows()
+
+cv2.imwrite("copy.jpg", img)       # 保存
+```
+
+三个基础认知：
+
+- **坐标顺序**：`img[y, x]`——先高后宽，和数学直觉相反，最容易错
+- **BGR 顺序**：OpenCV 读图是 BGR 不是 RGB！`img[0, 0]` 拿到的是 (蓝, 绿, 红)
+- **数组即图像**：图像就是 numpy 数组，一切操作都是数组运算
+
+## 裁剪、缩放、灰度
+
+```python
+# 裁剪：y 范围, x 范围（ROI 感兴趣区域——视觉题提速的关键手段）
+roi = img[100:300, 200:400]
+
+# 缩放
+small = cv2.resize(img, (160, 120))   # 注意是 (宽, 高)
+
+# 灰度化（视觉预处理第一站）
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+print(gray.shape)                     # (480, 640)，单通道
+```
+
+**ROI 裁剪是电赛视觉的提速利器**：只在感兴趣区域里做识别，速度翻倍、抗干扰。很多视觉题的坑就是「全图处理太慢、误检太多」。
+
+## 画图与标注
+
+调试时把识别结果画出来看，是最直观的验证：
+
+```python
+# 画矩形（坐标都是 (x, y) 形式）
+cv2.rectangle(img, (200, 100), (300, 200), (0, 0, 255), 2)   # BGR：红色
+
+# 画圆
+cv2.circle(img, (250, 150), 20, (0, 255, 0), -1)             # 绿色实心
+
+# 写文字
+cv2.putText(img, "target", (200, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+# 画线
+cv2.line(img, (320, 0), (320, 480), (255, 0, 0), 1)          # 蓝色中线
+
+cv2.imshow("annotated", img)
+cv2.waitKey(0)
+```
+
+OpenMV 里对应的画图 API：`img.draw_rectangle()`、`img.draw_cross()`——**同一套思路，画出来验证识别结果**。本站颜色循迹篇的代码里就是这么干的。
+
+## 摄像头实时处理
+
+```python
+import cv2
+
+cap = cv2.VideoCapture(0)
+while True:
+    ok, frame = cap.read()
+    if not ok:
+        break
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    cv2.imshow("live", gray)          # 实时显示灰度
+    if cv2.waitKey(1) == 27:          # ESC 退出
+        break
+cap.release()
+cv2.destroyAllWindows()
+```
+
+实时处理的循环模式：**读帧 → 处理 → 显示 → 等按键**。后面所有的视觉算法（二值化、识别）都是在这个循环里加一行处理代码。
+
+## 常见坑
+
+- **`waitKey` 忘了写**：`imshow` 不配 `waitKey` 窗口闪退或卡死。
+- **坐标写反**：`img.shape` 是 (高, 宽)，`resize` 是 (宽, 高)——两处顺序相反，是 OpenCV 第一坑。
+- **BGR 当 RGB**：`(255, 0, 0)` 你以为红色其实是蓝色。想用 RGB 语义就 `cv2.cvtColor(img, cv2.COLOR_BGR2RGB)`。
+- **中文路径读图失败**：`imread` 对中文路径支持差，返回 None。代码路径和图片路径都用英文。
+- **imread 返回 None 不报错**：路径错了它默默返回 None，`img.shape` 才报错。读图后先检查 `if img is None`。

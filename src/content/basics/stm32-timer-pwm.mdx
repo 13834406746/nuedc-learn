@@ -1,0 +1,72 @@
+---
+title: 定时器与 PWM：时间与占空比的掌控
+description: 定时器结构、PWM 输出配置、频率与占空比计算——控制周期、电机驱动、超声波测距全靠它。
+track: control
+tags: [定时器, PWM, 基础]
+date: 2026-08-14
+---
+
+定时器是 STM32 里出场率最高的外设：控制周期靠它、电机 PWM 靠它、编码器测速靠它（编码器模式）、超声波测距也靠它（输入捕获）。这篇把定时器和 PWM 讲透，后续所有控制代码的地基。
+
+## 定时器是什么
+
+定时器就是一个**可配置的计数器**，按你设定的频率计数，溢出时触发中断或事件：
+
+```
+时钟 72MHz → 预分频 PSC → 计数时钟 → 计数器 CNT（0~ARR 循环）→ 溢出中断
+```
+
+```c
+TIM_TimeBaseInitTypeDef t;
+t.TIM_Prescaler = 7199;          /* 分频：72MHz / 7200 = 10kHz */
+t.TIM_Period = 9999;             /* 计数 10000 次溢出：10kHz/10000 = 1Hz */
+t.TIM_CounterMode = TIM_CounterMode_Up;
+TIM_TimeBaseInit(TIM2, &t);
+TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);   /* 开溢出中断 */
+TIM_Cmd(TIM2, ENABLE);
+```
+
+溢出频率 = 72MHz / (PSC+1) / (ARR+1)。例子里就是 1Hz 的定时中断。**这个公式必须会心算**——配 10ms 控制周期、1ms 调度、PWM 频率全靠它。
+
+## PWM 输出：电机和舵机的命脉
+
+PWM（脉宽调制）= 高频方波 + 可调占空比。电机转速、舵机角度、LED 亮度全靠占空比控制。配置：
+
+```c
+/* 定时器通道输出 PWM（如 TIM2_CH1 → PA0） */
+TIM_OCInitTypeDef oc;
+oc.TIM_OCMode = TIM_OCMode_PWM1;        /* PWM 模式 1 */
+oc.TIM_OutputState = TIM_OutputState_Enable;
+oc.TIM_Pulse = 500;                     /* 占空比 = Pulse / ARR */
+TIM_OC1Init(TIM2, &oc);
+TIM_OC1PreloadConfig(TIM2, TIM_OCPreloadEnable);
+TIM_Cmd(TIM2, ENABLE);
+```
+
+**占空比 = TIM_Pulse / TIM_Period**（上面的例子 ARR=9999，Pulse=500 就是 5%）。运行中改占空比：
+
+```c
+TIM_SetCompare1(TIM2, new_pulse);    /* 动态调速 */
+```
+
+电机 PWM 频率选 10k~20kHz（见电机闭环篇），舵机用 50Hz（周期 20ms，占空比 2.5%~12.5% 对应 0°~180°）。
+
+## 三种常用场景速查
+
+| 场景 | 定时器用法 | 频率/周期参考 |
+|------|-----------|--------------|
+| 控制周期节拍 | 溢出中断，ISR 里跑 PID | 1~10ms |
+| 电机 PWM | 通道输出比较 | 10~20kHz |
+| 舵机 PWM | 通道输出比较 | 50Hz |
+| 编码器测速 | 编码器模式（CH1+CH2） | 硬件四倍频 |
+| 超声波测距 | 输入捕获测脉宽 | — |
+
+一个定时器可以同时干几件事：PWM 输出用通道，定时中断用溢出。但**编码器模式会占用通道**，别和 PWM 输出冲突。
+
+## 常见坑
+
+- **PSC/ARR 算错导致周期错**：记住公式 `f = 72MHz/((PSC+1)(ARR+1))`，先算好再写代码，别靠猜。
+- **忘了开时钟**：`RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE)` 漏了，定时器完全不工作。APB1 和 APB2 总线上的定时器别搞混（TIM2~4 在 APB1，TIM1/8 在 APB2）。
+- **PWM 输出没使能**：`TIM_Cmd` 开了定时器但没 `TIM_OCxInit` 或输出使能，引脚没波形。查完配置先示波器/逻辑分析仪看波形。
+- **改了 Pulse 没生效**：预装载（Preload）没开，更新事件才生效，动态调速会「跳变」。开 `TIM_OCxPreloadConfig`。
+- **高级定时器 TIM1/8 的 PWM 需要 `TIM_CtrlPWMOutputs`**：F1 系列高级定时器有个 MOE 主输出使能位，忘了开，PWM 死活不出来。新手最经典的「没波形」。

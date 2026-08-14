@@ -1,0 +1,108 @@
+---
+title: I2C 通信：两根线连一片世界
+description: I2C 总线原理、寄存器读写流程、MPU6050 场景、软件模拟 I2C——传感器和 OLED 都靠它。
+track: control
+tags: [I2C, 通信, 基础]
+date: 2026-08-14
+---
+
+import FlowDiagram from '../../components/FlowDiagram.astro';
+
+MPU6050、OLED 屏、EEPROM、很多传感器都用 I2C。两根线（SCL 时钟 + SDA 数据）挂多个设备，靠地址区分。这篇讲透 I2C 的读写套路——学会了，任何 I2C 器件的驱动都能自己写。
+
+先看 I2C 的总线结构——一主多从，靠地址寻址：
+
+<FlowDiagram title="I2C 总线结构"
+             stages={['主控 MCU', 'SCL / SDA 总线', '从机 0x68 MPU6050', '从机 0x3C OLED']} />
+
+## I2C 的时序套路
+
+I2C 通信就四个动作：**起始、停止、发字节、收字节**，加上应答位（ACK）。
+
+```
+起始条件：SCL 高时 SDA 由高变低
+停止条件：SCL 高时 SDA 由低变高
+发送字节：SDA 逐位发送（高位在前），第 9 个时钟收 ACK
+```
+
+**寄存器读写的统一套路**（所有 I2C 器件通用）：
+
+```
+写寄存器：起始 → 设备地址(W) → 寄存器地址 → 数据 → 停止
+读寄存器：起始 → 设备地址(W) → 寄存器地址 → 重复起始 → 设备地址(R) → 读数据 → 停止
+```
+
+## 硬件 I2C（标准库）
+
+以读 MPU6050 加速度原始值为例：
+
+```c
+/* 配置 PB6=SCL, PB7=SDA，复用开漏 + 上拉 */
+I2C_InitTypeDef i;
+i.I2C_ClockSpeed = 400000;          /* 400kHz 快速模式 */
+i.I2C_Mode = I2C_Mode_I2C;
+i.I2C_DutyCycle = I2C_DutyCycle_2;
+i.I2C_Ack = I2C_Ack_Enable;
+I2C_Init(I2C1, &i);
+I2C_Cmd(I2C1, ENABLE);
+
+/* 读 MPU6050 地址 0x3B 开始的两个字节（ACCEL_XOUT_H/L） */
+uint8_t reg = 0x3B;
+I2C_GenerateSTART(I2C1, ENABLE);
+while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT));
+I2C_Send7bitAddress(I2C1, 0x68, I2C_Direction_Transmitter);
+while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED));
+I2C_SendData(I2C1, reg);
+while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_TRANSMITTED));
+I2C_GenerateSTOP(I2C1, ENABLE);
+```
+
+注意 `0x68` 是 7 位地址，标准库 `I2C_Send7bitAddress` 会自己拼读写位。
+
+## 软件模拟 I2C：绕开硬件的坑
+
+STM32F1 的硬件 I2C 有不少人踩过坑（总线锁死、事件判断错位），所以电赛圈子里**软件模拟 I2C 非常流行**——用 GPIO 手动翻转 SCL/SDA，时序完全可控：
+
+```c
+#define SCL_H()  GPIO_SetBits(GPIOB, GPIO_Pin_6)
+#define SCL_L()  GPIO_ResetBits(GPIOB, GPIO_Pin_6)
+#define SDA_H()  GPIO_SetBits(GPIOB, GPIO_Pin_7)
+#define SDA_L()  GPIO_ResetBits(GPIOB, GPIO_Pin_7)
+#define SDA_READ()  GPIO_ReadInputDataBit(GPIOB, GPIO_Pin_7)
+
+void I2C_Start(void)
+{
+    SDA_H(); SCL_H(); delay_us(5);
+    SDA_L(); delay_us(5);     /* SCL 高时 SDA 拉低 = 起始 */
+    SCL_L();
+}
+
+void I2C_Stop(void)
+{
+    SDA_L(); SCL_H(); delay_us(5);
+    SDA_H(); delay_us(5);     /* SCL 高时 SDA 拉高 = 停止 */
+}
+
+uint8_t I2C_WriteByte(uint8_t data)
+{
+    for (int i = 0; i < 8; i++) {
+        if (data & 0x80) SDA_H(); else SDA_L();
+        data <<= 1;
+        SCL_H(); delay_us(2); SCL_L(); delay_us(2);
+    }
+    SDA_H();                  /* 释放 SDA，等从机应答 */
+    SCL_H(); delay_us(2);
+    uint8_t ack = !SDA_READ();
+    SCL_L();
+    return ack;               /* 1=收到 ACK */
+}
+```
+
+模拟 I2C 的好处：**任意 GPIO 都能当 I2C 用**（引脚不够时救命）、时序可控、不容易锁死。坏处：占 CPU（高速器件受限）。电赛场景（MPU6050、OLED）模拟 I2C 完全够用，是很多国奖队伍的选择。
+
+## 常见坑
+
+- **忘了上拉电阻**：I2C 是开漏，SCL/SDA 必须外接上拉（4.7k 常用）或开内部上拉，否则通信失败。
+- **地址搞错**：MPU6050 的 AD0 引脚决定地址是 0x68 还是 0x69，接法不同地址不同。7 位地址 vs 8 位地址（含读写位）也常搞混。
+- **硬件 I2C 总线锁死**：通信中途出错可能锁死总线，表现为初始化卡死。复位外设 + 重新初始化能解决大部分。
+- **模拟 I2C 延时太短**：SCL 频率太高，从机跟不上。400kHz 对应 2.5µs 半周期，别贪快。

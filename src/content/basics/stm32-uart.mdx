@@ -1,0 +1,89 @@
+---
+title: 串口基础：USART 收发与调试
+description: 串口原理、轮询收发、中断收发、printf 重定向——通信和调试都靠它，先把它跑通。
+track: control
+tags: [串口, USART, 基础]
+date: 2026-08-14
+---
+
+串口是电赛的「万能胶」：和蓝牙模块、视觉模块、电脑通信，全靠它；调试时打印数据，也靠它。这篇讲透基础收发，进阶的 IDLE+DMA 看串口进阶篇。
+
+## 串口是什么
+
+USART 全双工异步串行通信：**一根 TX、一根 RX，共地**，按约定波特率一位一位发。
+
+- 波特率：每秒传多少位。115200 最常用（一字节 = 起始位 + 8 数据位 + 停止位 ≈ 10 位，约 11.5KB/s）
+- 异步 = 没有时钟线，靠**波特率约定 + 起始位**同步
+- 电平：STM32 是 TTL 3.3V 电平，接电脑要 USB-TTL 转换器（CH340 等）
+
+配置（标准库）：
+
+```c
+USART_InitTypeDef u;
+u.USART_BaudRate = 115200;
+u.USART_WordLength = USART_WordLength_8b;
+u.USART_StopBits = USART_StopBits_1;
+u.USART_Parity = USART_Parity_No;
+u.USART_Mode = USART_Mode_RX | USART_Mode_TX;
+USART_Init(USART1, &u);
+USART_Cmd(USART1, ENABLE);
+```
+
+注意：USART1 在 APB2（72MHz），USART2/3 在 APB1（36MHz）——**串口时钟源不同，同一波特率配置的分频参数不同**，标准库自动处理，但你要知道为什么。
+
+## 发送与接收
+
+**轮询发送**（简单可靠）：
+
+```c
+void UART_SendByte(USART_TypeDef *u, uint8_t b)
+{
+    while (USART_GetFlagStatus(u, USART_FLAG_TXE) == RESET);  /* 等发送寄存器空 */
+    USART_SendData(u, b);
+}
+```
+
+**轮询接收**（注意：死等会卡住主循环）：
+
+```c
+uint8_t UART_RecvByte(USART_TypeDef *u)
+{
+    while (USART_GetFlagStatus(u, USART_FLAG_RXNE) == RESET);  /* 等收到数据 */
+    return (uint8_t)USART_ReceiveData(u);
+}
+```
+
+轮询接收的问题：主循环忙别的时数据就丢了。正确姿势是**中断接收**：
+
+```c
+void USART1_IRQHandler(void)
+{
+    if (USART_GetITStatus(USART1, USART_IT_RXNE)) {
+        uint8_t b = USART_ReceiveData(USART1);   /* 读数据同时清标志 */
+        /* 把 b 存入接收缓冲区（环形缓冲见进阶篇） */
+    }
+}
+```
+
+## printf 重定向：调试的命根子
+
+把 printf 输出到串口，看日志调代码：
+
+```c
+int fputc(int ch, FILE *f)
+{
+    while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET);
+    USART_SendData(USART1, (uint8_t)ch);
+    return ch;
+}
+```
+
+然后在代码里 `printf("速度: %.1f mm/s\r\n", speed);`，串口助手就能看到。**加 `\r\n`** 换行（很多终端只认 `\r\n`）。
+
+## 常见坑
+
+- **TX/RX 交叉接**：A 的 TX 接 B 的 RX，很多人接成 TX 对 TX，收不到数据。第一件事查接线。
+- **必须共地**：两个设备不共地，电平参考不一致，乱码。共地是串口第一定律。
+- **波特率不一致**：两边波特率差太多就乱码；差一点会偶发错位。用双方都支持的标称值。
+- **printf 没重定向**：`printf` 默认输出到 semihosting，不重定向 `fputc` 程序会卡死或没有输出。Keil 里还要勾选 Use MicroLIB。
+- **中断接收和轮询冲突**：开了 RXNE 中断又在主循环轮询 `USART_ReceiveData`，数据会被抢读。要么全中断要么全轮询，别混。

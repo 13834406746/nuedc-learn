@@ -1,0 +1,112 @@
+---
+title: Python 基础速览：视觉学习的语言门槛
+description: 零基础速成课：变量、循环、函数、列表字典、文件——能看懂 OpenCV 示例代码的最低必要语法。
+track: vision
+tags: [Python, 基础]
+date: 2026-08-14
+---
+
+视觉主线用 Python（OpenMV 和 PC 端 OpenCV 都是）。这篇不讲 Python 全貌，只讲**看懂视觉代码所需的最低必要语法**——读完这篇，你就能读懂本站所有 Python 示例。
+
+## 变量与类型：不用声明
+
+```python
+speed = 100          # 整数
+ratio = 0.85         # 浮点
+name = "left_motor"  # 字符串
+ok = True            # 布尔
+```
+
+Python 变量**不需要声明类型**，赋值即创建。类型跟着值走。
+
+## 列表与字典：数据容器
+
+```python
+# 列表：有序集合，下标从 0 开始
+blobs = [blob1, blob2, blob3]
+first = blobs[0]
+count = len(blobs)
+
+# 字典：键值对，类似 C 的结构体
+config = {"kp": 2.0, "ki": 0.1, "name": "pid"}
+config["kp"] = 2.5     # 改值
+```
+
+OpenCV 里图像就是「列表套列表」；OpenMV 的 find_blobs 返回的就是 blob 对象的列表——`max(blobs, key=lambda x: x.pixels())` 就是从列表里挑最大色块。
+
+## 条件与循环
+
+```python
+if err > 0:
+    turn_left()
+elif err < 0:
+    turn_right()
+else:
+    go_straight()
+
+# for 循环：遍历列表
+for b in blobs:
+    print(b.cx())
+
+# while 循环：摄像头主循环
+while True:
+    img = sensor.snapshot()
+```
+
+注意 Python 用**缩进**表示代码块，没有大括号——`if` 下面的缩进行都是它的子句。缩进错误直接报错，这是新手第一坑。
+
+## 函数
+
+```python
+def send_frame(uart, cx, cy):
+    f = bytearray([0xAA, 0x55, cx & 0xFF, cy & 0xFF, 0x00])
+    f[4] = (f[2] + f[3]) & 0xFF
+    uart.write(f)
+
+send_frame(uart, 30, 40)   # 调用
+```
+
+函数用 `def` 定义，可以带默认参数、返回多个值：
+
+```python
+def read_center(img):
+    w = img.width()
+    h = img.height()
+    return w // 2, h // 2   # 返回两个值
+
+cx, cy = read_center(img)
+```
+
+## 面向对象的皮毛
+
+OpenMV/OpenCV 代码里到处是「对象.方法」的写法，只需理解一点：
+
+```python
+img = sensor.snapshot()          # img 是图像对象
+img.width()                      # 对象的方法
+blob = blobs[0]
+blob.cx(), blob.rect()           # 色块对象的属性/方法
+```
+
+不用深究面向对象理论，记住「对象.方法()」这个语法即可。看的代码多了自然就熟了。
+
+## 文件与模块
+
+```python
+import sensor, image, time     # 导入模块（库）
+from pyb import UART           # 从模块导入特定类
+
+# 读文件
+with open("config.txt", "r") as f:
+    kp = float(f.read())
+```
+
+OpenMV 的 `import sensor`、OpenCV 的 `import cv2` 都是导入库。
+
+## 常见坑
+
+- **缩进混乱**：Tab 和空格混用报错。编辑器统一用 4 空格。
+- **忘了冒号**：`if`、`for`、`def` 行尾必须有 `:`。
+- **中英文标点混用**：中文全角括号、逗号直接报语法错误。报错先看是不是标点。
+- **列表越界不报错**：Python 下标越界会报 IndexError，但负数下标合法（`blobs[-1]` 是最后一个），语义不同别搞混。
+- **`print` 调试**：OpenMV 里 `print` 输出到 IDE 串口终端，PC 上输出到控制台——这是视觉调试的第一工具，多打印中间结果。
