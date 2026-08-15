@@ -23,23 +23,62 @@ const sections = [
 <BaseLayout title="首页">
   <main class="main-page">
     <div class="hero">
-      <h1>电赛学习站</h1>
-      <p class="sub">
-        个人备战知识库：控制类走<strong>进阶路线</strong>（串级 PID、调参方法论、姿态解算），视觉类走<strong>从零到实战路线</strong>（环境搭建 → 识别 → 与单片机联动）。所有内容以「跟着做能把题做出来」为标准。
-      </p>
-      <div class="hero-stats">
-        <div class="hero-stat"><span class="num">{total}</span><span class="label">文章总数</span></div>
-        <div class="hero-stat"><span class="num">{controlCount}</span><span class="label">控制类算法</span></div>
-        <div class="hero-stat"><span class="num">{visionCount}</span><span class="label">视觉类算法</span></div>
-        <div class="hero-stat"><span class="num">{all.contests.length}</span><span class="label">赛题解析</span></div>
+      <div class="hero-main">
+        <span class="hero-eyebrow">NUEDC · 备战知识库</span>
+        <h1>电赛学习站</h1>
+        <p class="sub">
+          个人备战知识库：控制类走<strong>进阶路线</strong>（串级 PID、调参方法论、姿态解算），视觉类走<strong>从零到实战路线</strong>（环境搭建 → 识别 → 与单片机联动）。所有内容以「跟着做能把题做出来」为标准。
+        </p>
+        <div class="hero-ctas">
+          <a class="hero-cta" href={`${base}path`}>开始学习 →</a>
+          <a class="hero-cta-ghost" href={`${base}algorithms`}>浏览算法板块</a>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat"><span class="num">{total}</span><span class="label">文章总数</span></div>
+          <div class="hero-stat"><span class="num">{controlCount}</span><span class="label">控制类算法</span></div>
+          <div class="hero-stat"><span class="num">{visionCount}</span><span class="label">视觉类算法</span></div>
+          <div class="hero-stat"><span class="num">{all.contests.length}</span><span class="label">赛题解析</span></div>
+        </div>
       </div>
-      <a class="hero-cta" href={`${base}path`}>开始学习 →</a>
+      <div class="hero-art" aria-hidden="true">
+        <svg viewBox="0 0 360 300" fill="none">
+          <g stroke="url(#hero-line)" stroke-width="1.6" stroke-linecap="round">
+            <path d="M40 240h70l24-24h86"/>
+            <path d="M60 268h56l20-20"/>
+            <path d="M40 60h64l28 28h108"/>
+            <path d="M120 36v40"/>
+            <path d="M250 88v52"/>
+            <path d="M250 216v-48h52"/>
+            <path d="M88 152h64l20 20h48"/>
+          </g>
+          <g fill="url(#hero-dot)">
+            <circle cx="40" cy="240" r="4.5"/><circle cx="220" cy="216" r="4.5"/>
+            <circle cx="60" cy="268" r="4.5"/><circle cx="136" cy="248" r="4.5"/>
+            <circle cx="40" cy="60" r="4.5"/><circle cx="240" cy="88" r="4.5"/>
+            <circle cx="120" cy="36" r="4.5"/><circle cx="250" cy="140" r="4.5"/>
+            <circle cx="302" cy="168" r="4.5"/><circle cx="88" cy="152" r="4.5"/><circle cx="220" cy="172" r="4.5"/>
+          </g>
+          <rect x="150" y="110" width="72" height="72" rx="12" stroke="url(#hero-line)" stroke-width="2"/>
+          <rect x="168" y="128" width="36" height="36" rx="7" fill="url(#hero-dot)" opacity="0.9"/>
+          <defs>
+            <linearGradient id="hero-line" x1="0" y1="0" x2="360" y2="300">
+              <stop stop-color="#2563eb"/><stop offset="1" stop-color="#06b6d4"/>
+            </linearGradient>
+            <linearGradient id="hero-dot" x1="0" y1="0" x2="360" y2="300">
+              <stop stop-color="#3b82f6"/><stop offset="1" stop-color="#22d3ee"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
     </div>
 
     <div class="section-cards">
       {sections.map((s) => (
-        <a class="section-card" href={`${base}${s.id}`}>
-          <span class="icon">{s.icon}</span>
+        <a class={`section-card sc-${s.id}`} href={`${base}${s.id}`}>
+          <span class="card-top">
+            <span class="icon">{s.icon}</span>
+            <span class="card-arrow" aria-hidden="true">→</span>
+          </span>
           <span class="name">{s.name}</span>
           <span class="count">（{all[s.id].length} 篇）</span>
           <p class="desc">{s.desc}</p>

@@ -20,8 +20,10 @@ for (const c of ['basics', 'algorithms', 'hardware', 'contests']) {
 ---
 <BaseLayout title="资源汇总">
   <main class="main-page">
-    <h1 style={`margin-bottom:0.3rem;`}>资源汇总</h1>
-    <p style={`color:var(--muted);margin-bottom:1.6rem;`}>全站文章精选外链的自动聚合，按板块分组；来源文章更新时本页自动同步。</p>
+    <header class="page-head">
+      <h1>资源汇总</h1>
+      <p>全站文章精选外链的自动聚合，按板块分组；来源文章更新时本页自动同步。</p>
+    </header>
     {grouped.map(({ collection, links }) => links.length > 0 && (
       <section>
         <h2>{names[collection]}</h2>

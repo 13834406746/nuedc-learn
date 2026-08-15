@@ -42,8 +42,10 @@ const entries = [...inPath, ...outside];
 ---
 <BaseLayout title={names[collection]}>
   <main class="main-page">
-    <h1 style={`margin-bottom:0.3rem;`}>{names[collection]}</h1>
-    <p style={`color:var(--muted);margin-bottom:1.6rem;`}>{intros[collection]}</p>
+    <header class="page-head">
+      <h1>{names[collection]}</h1>
+      <p>{intros[collection]}</p>
+    </header>
     <ul class="article-list">
       {entries.map((e) => {
         const meta = pathOrder.get(slugOf(e.collection, e.id));

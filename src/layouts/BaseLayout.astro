@@ -2,29 +2,97 @@
 import '../styles/global.css';
 const { title } = Astro.props;
 const base = import.meta.env.BASE_URL;
+const pathname = Astro.url.pathname;
+const navItems = [
+  { href: `${base}path`, label: '学习路径' },
+  { href: `${base}basics`, label: '基础知识' },
+  { href: `${base}algorithms`, label: '代码与算法' },
+  { href: `${base}hardware`, label: '机械与硬件' },
+  { href: `${base}contests`, label: '赛题解析' },
+  { href: `${base}resources`, label: '资源' },
+  { href: `${base}search`, label: '搜索' },
+];
+const isCurrent = (href) =>
+  pathname === href || pathname === href + '/' ||
+  (href !== base && pathname.startsWith(href + '/')) ||
+  (href === `${base}algorithms` && pathname.startsWith(`${base}docs/algorithms`)) ||
+  (href === `${base}basics` && pathname.startsWith(`${base}docs/basics`)) ||
+  (href === `${base}hardware` && pathname.startsWith(`${base}docs/hardware`)) ||
+  (href === `${base}contests` && pathname.startsWith(`${base}docs/contests`));
 ---
 <!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href={`${base}favicon.ico`} sizes="32x32" />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
     <title>{title} · 电赛学习站</title>
   </head>
   <body>
+    <div class="scroll-progress" aria-hidden="true"></div>
     <header class="site-header">
       <div class="inner">
-        <a class="brand" href={base}>电赛学习站</a>
+        <a class="brand" href={base}>
+          <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <rect x="6" y="6" width="20" height="20" rx="5" stroke="url(#bg-grad)" stroke-width="2.4"/>
+            <path d="M12.5 19.5 16 11l3.5 8.5" stroke="url(#bg-grad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M13.8 16.8h4.4" stroke="url(#bg-grad)" stroke-width="2.4" stroke-linecap="round"/>
+            <path d="M11 2.5v3M16 2.5v3M21 2.5v3M11 26.5v3M16 26.5v3M21 26.5v3M2.5 11h3M2.5 16h3M2.5 21h3M26.5 11h3M26.5 16h3M26.5 21h3" stroke="#06b6d4" stroke-width="2" stroke-linecap="round"/>
+            <defs>
+              <linearGradient id="bg-grad" x1="6" y1="6" x2="26" y2="26">
+                <stop stop-color="#2563eb"/><stop offset="1" stop-color="#06b6d4"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          电赛学习站
+        </a>
         <nav>
-          <a href={`${base}path`}>学习路径</a>
-          <a href={`${base}basics`}>基础知识</a>
-          <a href={`${base}algorithms`}>代码与算法</a>
-          <a href={`${base}hardware`}>机械与硬件</a>
-          <a href={`${base}contests`}>赛题解析</a>
-          <a href={`${base}resources`}>资源</a>
-          <a href={`${base}search`}>搜索</a>
+          {navItems.map((item) => (
+            <a href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined}>{item.label}</a>
+          ))}
         </nav>
       </div>
     </header>
     <slot />
+    <footer class="site-footer">
+      <div class="inner">
+        <div class="foot-brand">
+          <span class="foot-name">电赛学习站</span>
+          <p class="foot-desc">个人电赛备战知识库：控制类进阶 + 视觉类从零到实战。内容优先，网站只是工具。</p>
+        </div>
+        <div class="foot-col">
+          <h4>板块</h4>
+          <a href={`${base}basics`}>基础知识</a>
+          <a href={`${base}algorithms`}>代码与算法</a>
+          <a href={`${base}hardware`}>机械与硬件</a>
+          <a href={`${base}contests`}>赛题解析</a>
+        </div>
+        <div class="foot-col">
+          <h4>工具</h4>
+          <a href={`${base}path`}>学习路径</a>
+          <a href={`${base}resources`}>资源汇总</a>
+          <a href={`${base}search`}>全站搜索</a>
+        </div>
+      </div>
+      <div class="foot-bar">
+        <span>© 2026 NUEDC Learn · 由 Astro + Pagefind 构建</span>
+        <span class="foot-motto">跟着做，把题做出来。</span>
+      </div>
+    </footer>
+    <script is:inline>
+      // 顶部阅读进度条（纯视觉，随滚动更新）
+      (function () {
+        var bar = document.querySelector('.scroll-progress');
+        if (!bar) return;
+        function update() {
+          var h = document.documentElement;
+          var max = h.scrollHeight - h.clientHeight;
+          bar.style.width = (max > 0 ? (h.scrollTop / max) * 100 : 0) + '%';
+        }
+        update();
+        document.addEventListener('scroll', update, { passive: true });
+      })();
+    </script>
   </body>
 </html>
