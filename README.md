@@ -29,6 +29,8 @@ resources:         # 可选：精选外链，自动汇总到资源页
 
 正文是普通 Markdown；需要交互演示时一行嵌入：`<PidDemo />`（还有 `FilterDemo`、`ThresholdDemo`，组件在 `src/components/`）。嵌入前在 frontmatter 之后加一行导入，路径按文章所在目录数 `../`（算法板块的文章是 `../../../components/PidDemo.astro`）。
 
+要排进学习主线（路径页、侧栏排序、上一篇/下一篇），还需在 `src/config/paths.ts` 对应数组的合适位置加一行 slug（格式 `板块/文件名`，去掉 `.mdx`）；不加也能访问，只是不参与路径编号。删除文章时记得同步删掉该行，否则路径页会跳关、相邻文章的上下篇会变成死链。
+
 ## 上线
 
 push 到 main 即自动构建部署（GitHub Actions）。构建失败不会影响线上旧版本，去仓库 Actions 页看日志。
