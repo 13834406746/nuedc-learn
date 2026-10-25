@@ -81,6 +81,11 @@ const hrefOf = (slug) => {
           });
           steps.forEach(function (s, i) {
             s.classList.toggle('current', i === current);
+            if (i === current) {
+              // 当前关圆圈内标 ▶（未读时圆圈为空，写入后以主色显示）
+              const st = s.querySelector('[data-state]');
+              if (!st.textContent) st.textContent = '▶';
+            }
             s.querySelector('[data-go]').style.display = i === current ? 'inline-block' : 'none';
           });
           const total = steps.length;

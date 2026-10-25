@@ -15,12 +15,12 @@ const section = entry.collection;
 // 侧栏按学习路径顺序排，路径外文章按日期排
 const pathOrder = new Map();
 for (const p of paths) {
-  p.steps.forEach((slug, i) => pathOrder.set(slug, i));
+  p.steps.forEach((slug, i) => pathOrder.set(slug, { num: i + 1 }));
 }
 const allSiblings = await getCollection(section);
 const sibInPath = allSiblings
   .filter((e) => pathOrder.has(slugOf(e.collection, e.id)))
-  .sort((a, b) => pathOrder.get(slugOf(a.collection, a.id)) - pathOrder.get(slugOf(b.collection, b.id)));
+  .sort((a, b) => pathOrder.get(slugOf(a.collection, a.id)).num - pathOrder.get(slugOf(b.collection, b.id)).num);
 const sibOutside = allSiblings
   .filter((e) => !pathOrder.has(slugOf(e.collection, e.id)))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
@@ -33,11 +33,20 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
 const currentSlug = slugOf(entry.collection, entry.id);
 const step = findStep(currentSlug);
 const base = import.meta.env.BASE_URL;
+// 全站实际存在的文章 slug：上一篇/下一篇只指向真实存在的页面，
+// 防止 paths 配置引用了被删的文章而渲染出死链
+const existingSlugs = new Set();
+for (const c of ['basics', 'algorithms', 'hardware', 'contests']) {
+  for (const e of await getCollection(c)) existingSlugs.add(slugOf(e.collection, e.id));
+}
 let prev = null, next = null, stepNum = 0;
 if (step) {
   stepNum = step.index + 1;
+  const exists = (slug) => existingSlugs.has(slug);
   if (step.index > 0) prev = step.path.steps[step.index - 1];
+  if (prev && !exists(prev)) prev = null;
   if (step.index < step.path.steps.length - 1) next = step.path.steps[step.index + 1];
+  if (next && !exists(next)) next = null;
 }
 const hrefOf = (slug) => {
   const [col, ...rest] = slug.split('/');
@@ -49,12 +58,18 @@ const hrefOf = (slug) => {
     <aside class="side-nav">
       <h3>{sectionNames[section]}（{siblings.length}）</h3>
       <ul>
-        {siblings.map((e) => (
-          <li><a href={`${base}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`} aria-current={e.id === entry.id ? 'page' : undefined}>{e.data.title}</a></li>
-        ))}
+        {siblings.map((e) => {
+          const meta = pathOrder.get(slugOf(e.collection, e.id));
+          return (
+            <li><a href={`${base}docs/${e.collection}/${e.id.replace(/\.mdx$/, '')}`} aria-current={e.id === entry.id ? 'page' : undefined}>
+              {meta && <span class="path-num">{String(meta.num).padStart(2, '0')}</span>}
+              {e.data.title}
+            </a></li>
+          );
+        })}
       </ul>
     </aside>
-    <article>
+    <article data-pagefind-body>
       <h1>{entry.data.title}</h1>
       <p class="article-meta">
         <span class="track-badge">{trackNames[entry.data.track]}</span>
